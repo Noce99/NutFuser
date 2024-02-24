@@ -2,6 +2,7 @@ import pygame
 import config
 import os
 import cv2
+import numpy as np
 
 config.TMP_DATASET_PATH = "/home/enrico/Downloads/tmp_experiment"
 
@@ -12,7 +13,7 @@ SIDE_SPACE_SIZE = 300
 FONT = None
 
 FRAME = 0
-MAX_FRAME = 9
+MAX_FRAME = 400
 ACTUAL_SECTION = 0
 
 def set_section_title(screen, title):
@@ -47,6 +48,7 @@ def print_section(screen, number):
         img_path = os.path.join(folder_path, f"{FRAME}.png")
         my_array = cv2.imread(img_path)
         my_array = cv2.resize(my_array, (config.BEV_IMAGE_H*2, config.BEV_IMAGE_W*2), interpolation= cv2.INTER_NEAREST_EXACT)
+        my_array = np.rot90(my_array, k=1)
         img = pygame.surfarray.make_surface(my_array)
         img.convert()
         rect = img.get_rect()
