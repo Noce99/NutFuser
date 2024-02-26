@@ -1,3 +1,5 @@
+import sys
+sys.path.append("/leonardo_work/IscrC_SSNeRF/CARLA_0.9.15/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
 import carla 
 import os
 import math
@@ -6,6 +8,8 @@ import signal
 import time 
 import numpy as np
 import cv2
+from datetime import datetime
+
 import config
 
 from get_bbs import get_bbs_as_bev_image
@@ -258,8 +262,14 @@ for i in range(4):
 # world.on_tick(lambda world_snapshot: bbs_callback(world_snapshot)) # On Tick callback for bounding boxes
 
 # Create Directory Branches
-if os.path.isdir(config.TMP_DATASET_PATH):
-    shutil.rmtree(config.TMP_DATASET_PATH)
+
+#if os.path.isdir(config.TMP_DATASET_PATH):
+#    shutil.rmtree(config.TMP_DATASET_PATH)
+now = datetime.now()
+current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
+
+config.TMP_DATASET_PATH = os.path.join(config.TMP_DATASET_PATH, config.SELECTED_TOWN_NAME)
+config.TMP_DATASET_PATH = os.path.join(config.TMP_DATASET_PATH, current_time)
 os.mkdir(config.TMP_DATASET_PATH)
 
 rgb_A_folders_name =        [f"rgb_A_{i}"           for i in range(4)]
@@ -313,31 +323,31 @@ def merge_semantics():
     UNIFIED_BEV_SEMANTIC = np.zeros((config.BEV_IMAGE_H, config.BEV_IMAGE_W), dtype=np.uint8)
 
     # road
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 1] = 1*40
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 1] = 1
     # terrain where the car should not go
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 2] = 2*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 10] = 2*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 25] = 2*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 23] = 2*40
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 2] = 2
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 10] = 2
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 25] = 2
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 23] = 2
     # line_on_asphalt + written staff on the ground
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 24] = 3*40
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 24] = 3
     # vehicles
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 13] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 14] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 15] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 16] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 17] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 18] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 19] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 13] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 14] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 15] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 16] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 17] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 18] = 4*40
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 19] = 4*40
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 13] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 14] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 15] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 16] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 17] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 18] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 19] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 13] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 14] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 15] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 16] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 17] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 18] = 4
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 19] = 4
     # pedestrian
-    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 12] = 5*40
+    UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 12] = 5
 
 def unify_semantic_tags():
     """
@@ -354,28 +364,28 @@ def unify_semantic_tags():
     for i in range(4):
         UNIFIED_SEMANTIC = np.zeros((config.IMAGE_H, config.IMAGE_W), dtype=np.uint8)
         # road
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 1] = 1*20
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 1] = 1
         # terrain where the car should not go
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 2] = 2*20
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 10] = 2*20
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 25] = 2*20
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 23] = 2*20
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 2] = 2
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 10] = 2
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 25] = 2
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 23] = 2
         # line_on_asphalt + written staff on the ground
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 24] = 3*20
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 24] = 3
         # vehicles
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 13] = 4*20
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 14] = 4*20
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 15] = 4*20
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 16] = 4*20
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 17] = 4*20
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 18] = 4*20
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 19] = 4*20
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 13] = 4
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 14] = 4
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 15] = 4
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 16] = 4
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 17] = 4
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 18] = 4
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 19] = 4
         # pedestrian
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 12] = 5*20
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 12] = 5
         # sign
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 8] = 6*20
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 8] = 6
         # traffic lights
-        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 7] = 7*20
+        UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 7] = 7
         data_last_frame[f"semantic_{i}"] = UNIFIED_SEMANTIC
 
 signal.signal(signal.SIGINT, cntrl_c)
@@ -411,6 +421,8 @@ while True:
 #            cv2.imwrite(os.path.join(paths[f"optical_flow_{i}"], f"h_{saved_frame}.png"), data_last_frame[f"optical_flow_human_{i}"])
         saved_frame += 1
     carla_frame += 1
-    # world.wait_for_tick()
-    world.tick()
+    if saved_frame > 400:
+        exit()
+    # world.tick()
+    world.wait_for_tick()
 

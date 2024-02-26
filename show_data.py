@@ -35,7 +35,12 @@ def print_section(screen, number):
         for i in range(4):
             folder_path = os.path.join(config.TMP_DATASET_PATH, f"{folders_dict[number]}_{i}")
             img_path = os.path.join(folder_path, f"{FRAME}{extention}")
-            img = pygame.image.load(img_path)
+            if number != 3:
+                img = pygame.image.load(img_path)
+            else:
+                my_array = cv2.imread(img_path)
+                my_array = my_array * 20
+                img = pygame.surfarray.make_surface(my_array)
             img.convert()
             rect = img.get_rect()
             x = SIDE_SPACE_SIZE + config.IMAGE_W//2
@@ -61,6 +66,7 @@ def print_section(screen, number):
         img_path = os.path.join(folder_path, f"{FRAME}.png")
         my_array = cv2.imread(img_path)
         my_array = cv2.resize(my_array, (config.BEV_IMAGE_H*2, config.BEV_IMAGE_W*2), interpolation= cv2.INTER_NEAREST_EXACT)
+        my_array = my_array * 20
         img = pygame.surfarray.make_surface(my_array)
         img.convert()
         rect = img.get_rect()
