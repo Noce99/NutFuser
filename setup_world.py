@@ -15,9 +15,10 @@ else:
             print(f"This town does not exist [{town_int}], I will setup Town15!")
             town_int = 15
         else:
-            print(f"The argument was an integer! [{town_int}] -> {town_dict[town_int]}")
-    except:
-        print("The argument was not an integer, I will setup Town15!")
+            print(f"The argument was an integer! [{town_int}] -> {config.TOWN_DICT[town_int]}")
+    except Exception as e:
+        print(e)
+        print(f"The argument was not an integer [{sys.argv[1]}], I will setup Town15!")
         town_int = 15
 
 client = carla.Client('localhost', 2000)

@@ -14,6 +14,22 @@ import config
 
 from get_bbs import get_bbs_as_bev_image
 
+if len(sys.argv) == 1:
+    print("No argumnets I will setup Town15!")
+    town_int = 15
+else:
+    try:
+        town_int = int(sys.argv[1])
+        if town_int not in config.TOWN_DICT.keys():
+            print(f"This town does not exist [{town_int}], I will setup Town15!")
+            town_int = 15
+        else:
+            print(f"The argument was an integer! [{town_int}] -> {config.TOWN_DICT[town_int]}")
+    except Exception as e:
+        print(e)
+        print(f"The argument was not an integer [{sys.argv[1]}], I will setup Town15!")
+        town_int = 15
+
 data_last_frame = {}
 take_new_data = {}
 data_last_frame["lidar"] = np.zeros((config.BEV_IMAGE_H, config.BEV_IMAGE_W), dtype=np.uint8)
@@ -268,7 +284,8 @@ for i in range(4):
 now = datetime.now()
 current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
 
-config.TMP_DATASET_PATH = os.path.join(config.TMP_DATASET_PATH, config.SELECTED_TOWN_NAME)
+config.TMP_DATASET_PATH = os.path.join(config.TMP_DATASET_PATH, config.TOWN_DICT[town_int])
+os.mkdir(config.TMP_DATASET_PATH)
 config.TMP_DATASET_PATH = os.path.join(config.TMP_DATASET_PATH, current_time)
 os.mkdir(config.TMP_DATASET_PATH)
 
