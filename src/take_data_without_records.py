@@ -279,15 +279,15 @@ for i in range(4):
 
 # Create Directory Branches
 
-#if os.path.isdir(config.TMP_DATASET_PATH):
-#    shutil.rmtree(config.TMP_DATASET_PATH)
+#if os.path.isdir(config.DATASET_PATH):
+#    shutil.rmtree(config.DATASET_PATH)
 now = datetime.now()
 current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
 
-config.TMP_DATASET_PATH = os.path.join(config.TMP_DATASET_PATH, config.TOWN_DICT[town_int])
-os.mkdir(config.TMP_DATASET_PATH)
-config.TMP_DATASET_PATH = os.path.join(config.TMP_DATASET_PATH, current_time)
-os.mkdir(config.TMP_DATASET_PATH)
+config.DATASET_PATH = os.path.join(config.DATASET_PATH, config.TOWN_DICT[town_int])
+os.mkdir(config.DATASET_PATH)
+config.DATASET_PATH = os.path.join(config.DATASET_PATH, current_time)
+os.mkdir(config.DATASET_PATH)
 
 rgb_A_folders_name =        [f"rgb_A_{i}"           for i in range(4)]
 rgb_B_folders_name =        [f"rgb_B_{i}"           for i in range(4)]
@@ -296,14 +296,14 @@ semantic_folders_name =     [f"semantic_{i}"        for i in range(4)]
 optical_flow_folders_name = [f"optical_flow_{i}"    for i in range(4)]
 
 paths = {}
-paths["lidar"] = os.path.join(config.TMP_DATASET_PATH, "bev_lidar")
-paths["bev_semantic"] = os.path.join(config.TMP_DATASET_PATH, "bev_semantic")
+paths["lidar"] = os.path.join(config.DATASET_PATH, "bev_lidar")
+paths["bev_semantic"] = os.path.join(config.DATASET_PATH, "bev_semantic")
 for i in range(4):
-    paths[f"rgb_A_{i}"] = os.path.join(config.TMP_DATASET_PATH, rgb_A_folders_name[i])
-    paths[f"rgb_B_{i}"] = os.path.join(config.TMP_DATASET_PATH, rgb_B_folders_name[i])
-    paths[f"depth_{i}"] = os.path.join(config.TMP_DATASET_PATH, depth_folders_name[i])
-    paths[f"semantic_{i}"] = os.path.join(config.TMP_DATASET_PATH, semantic_folders_name[i])
-    paths[f"optical_flow_{i}"] = os.path.join(config.TMP_DATASET_PATH, optical_flow_folders_name[i])
+    paths[f"rgb_A_{i}"] = os.path.join(config.DATASET_PATH, rgb_A_folders_name[i])
+    paths[f"rgb_B_{i}"] = os.path.join(config.DATASET_PATH, rgb_B_folders_name[i])
+    paths[f"depth_{i}"] = os.path.join(config.DATASET_PATH, depth_folders_name[i])
+    paths[f"semantic_{i}"] = os.path.join(config.DATASET_PATH, semantic_folders_name[i])
+    paths[f"optical_flow_{i}"] = os.path.join(config.DATASET_PATH, optical_flow_folders_name[i])
 
 for key_path in paths:
     os.mkdir(paths[key_path])

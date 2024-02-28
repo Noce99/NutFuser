@@ -4,8 +4,6 @@ import os
 import cv2
 import numpy as np
 
-config.TMP_DATASET_PATH = "/home/enrico/Downloads/tmp_experiment"
-
 BACK_GROUD_COLOR = (0, 0, 255)
 SECTION_TITLE_COLOR = (255, 0, 0)
 SIDE_SPACE_SIZE = 300
@@ -33,7 +31,7 @@ def print_section(screen, number):
         if number in [0, 1]:
             extention = ".jpg"
         for i in range(4):
-            folder_path = os.path.join(config.TMP_DATASET_PATH, f"{folders_dict[number]}_{i}")
+            folder_path = os.path.join(config.DATASET_PATH, f"{folders_dict[number]}_{i}")
             img_path = os.path.join(folder_path, f"{FRAME}{extention}")
             if number != 3:
                 img = pygame.image.load(img_path)
@@ -49,7 +47,7 @@ def print_section(screen, number):
             screen.blit(img, rect)
     elif number == 5:
         # LIDAR
-        folder_path = os.path.join(config.TMP_DATASET_PATH, "bev_lidar")
+        folder_path = os.path.join(config.DATASET_PATH, "bev_lidar")
         img_path = os.path.join(folder_path, f"{FRAME}.png")
         my_array = cv2.imread(img_path)
         my_array = cv2.resize(my_array, (config.BEV_IMAGE_H*2, config.BEV_IMAGE_W*2), interpolation= cv2.INTER_NEAREST_EXACT)
@@ -62,7 +60,7 @@ def print_section(screen, number):
         rect.center = x, y
         screen.blit(img, rect)
         # SEMANTIC
-        folder_path = os.path.join(config.TMP_DATASET_PATH, "bev_semantic")
+        folder_path = os.path.join(config.DATASET_PATH, "bev_semantic")
         img_path = os.path.join(folder_path, f"{FRAME}.png")
         my_array = cv2.imread(img_path)
         my_array = cv2.resize(my_array, (config.BEV_IMAGE_H*2, config.BEV_IMAGE_W*2), interpolation= cv2.INTER_NEAREST_EXACT)
