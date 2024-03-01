@@ -1,8 +1,9 @@
 import math
 import os
+import time
 
 # GENERAL
-DATASET_PATH = "/home/enrico/Downloads/tmp/nut_dataset_old" # "/leonardo_work/IscrC_SSNeRF/nut_dataset"
+DATASET_PATH = "/home/enrico/Downloads/nut_dataset_old" # "/leonardo_work/IscrC_SSNeRF/nut_dataset"
 
 # TAKE DATA
 IMAGE_W = 1024
@@ -42,5 +43,8 @@ PRETRAINED_OPTIMIZER_PATH = None
 PRETRAINED_SCHEDULER_PATH = None
 PRETRAINED_SCALER_PATH = None
 TRAIN_LOG_DIR = os.path.join(os.getcwd(), "logs")
-REDUCE_LR_FIRST_TIME = 30
-REDUCE_LR_SECOND_TIME = 40
+REDUCE_LR_FIRST_TIME = 300 # 30
+REDUCE_LR_SECOND_TIME = 600 # 40
+
+
+START_TIME = time.time()

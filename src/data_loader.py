@@ -13,18 +13,20 @@ from tabulate import tabulate
 import cv2
 from tqdm import tqdm
 import numpy as np
+import torch
 
 
 DataFolder = collections.namedtuple('DataFolder', ['path', 'elements'])
 
 class backbone_dataset(Dataset):
-    def __init__(self):
+    def __init__(self, rank):
+        self.rank = rank
+
         self.cache = None
         self.data_folders = []
         self.bytes_that_I_need = None
         self.max_chars_data_folder_name_lenght = None
         self.ram_for_stooring_data_retrival_information = None
-        self.rank = int(os.environ['RANK'])
         # The real data corpus:
         self.data_path = None
         self.data_id = None
@@ -43,10 +45,19 @@ class backbone_dataset(Dataset):
             self.print_memory_summary_table()
         del self.data_folders
 
+        # TMP
+        self.tmp_data = []
+        for i in range(self.total_number_of_frames):
+            some_numbers = torch.rand(100)
+            self.tmp_data.append((some_numbers, some_numbers.sum()[None]))
+        #end TMP
+
     def close(self):
         self.clean_cache()
 
     def set_up_cache(self):
+        if self.rank != 0:
+            time.sleep(1)
         if "TMPDIR" in os.environ:
             if self.rank == 0:
                 print("Using TMPDIR as CACHE!")
@@ -65,9 +76,10 @@ class backbone_dataset(Dataset):
         self.cache = Cache(directory=config.JOB_TMP_DIR, size_limit=config.CACHE_SIZE_LIMIT)
 
     def clean_cache(self):
-        self.cache.close()
-        if os.path.isdir(config.JOB_TMP_DIR):
-            shutil.rmtree(config.JOB_TMP_DIR)
+        if self.rank == 0:
+            self.cache.close()
+            if os.path.isdir(config.JOB_TMP_DIR):
+                shutil.rmtree(config.JOB_TMP_DIR)
     
     def check_dataset_and_get_data_folders(self):
         if not os.path.isdir(config.DATASET_PATH):
@@ -180,17 +192,34 @@ class backbone_dataset(Dataset):
         return self.total_number_of_frames
     
     def __getitem__(self, idx):
+
+        # TMP
+        return self.tmp_data[idx]
+        # end TMP
+
         path = os.path.join(config.DATASET_PATH, self.data_path[idx])
         id = self.data_id[idx]
         data_should_be_in_cache = self.data_should_be_in_cache[idx]
         data_already_in_cache = self.data_already_in_cache[idx]
         if not data_already_in_cache:
-            data = tuple([cv2.imencode(data_folder[1], cv2.imread(os.path.join(config.DATASET_PATH, path, data_folder[0], f"{id}{data_folder[1]}"))) for data_folder in config.DATASET_FOLDER_STRUCT])
+            data = {}
+            for data_folder in config.DATASET_FOLDER_STRUCT:
+                data_name, data_extension = data_folder
+                data[data_name] = cv2.imread(os.path.join(config.DATASET_PATH, path, data_name, f"{id}{data_extension}"))
             if data_should_be_in_cache:
-                self.cache[idx] = data
+                data_compressed = {}
+                for data_folder in config.DATASET_FOLDER_STRUCT:
+                    data_name, data_extension = data_folder
+                    data_compressed[data_name] = cv2.imencode(data_extension, data[data_name])
+                self.cache[idx] = data_compressed
                 self.data_already_in_cache[idx] = True
         else:
-            data = self.cache[idx]
+            print("Trying to get data from cache!")
+            data_compressed = self.cache[idx]
+            data = {}
+            for data_folder in config.DATASET_FOLDER_STRUCT:
+                data_name, data_extension = data_folder
+                data[data_name] = cv2.imdecode(data_compressed[data_name], cv2.IMREAD_UNCHANGED)
         return data
 
 

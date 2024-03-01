@@ -1,48 +1,27 @@
+import config
+
 from tqdm import tqdm
 import torch
+import random
 
 class Trainer:
     def __init__(self,
                 model,
                 optimizer,
                 dataloader_train,
-                dataloader_val,
-                writer,
-                device,
                 scheduler,
                 scaler,
                 rank,
-                world_size,
-                cur_epoch):
+                writer):
         self.model = model
         self.optimizer = optimizer
         self.dataloader_train = dataloader_train
-        self.dataloader_val = dataloader_val
         self.writer = writer
-        self.device = device
         self.scheduler = scheduler
         self.scaler = scaler
         self.rank = rank
-        self.world_size = world_size
-        self.cur_epoch = cur_epoch
 
-        self.detailed_loss_weights = {
-            'loss_wp': 1.0,
-            'loss_target_speed': 1.0,
-            'loss_checkpoint': 1.0,
-            'loss_semantic': 1.0,
-            'loss_bev_semantic': 1.0,
-            'loss_depth': 1.0,
-            'loss_center_heatmap': 1.0,
-            'loss_wh': 1.0,
-            'loss_offset': 1.0,
-            'loss_yaw_class': 1.0,
-            'loss_yaw_res': 1.0,
-            'loss_velocity': 1.0,
-            'loss_brake': 1.0,
-            'loss_forcast': 0.2,
-            'loss_selection': 0.0,
-        }
+        self.epoch = 0
     
     def train(self):
         self.model.train()
@@ -50,18 +29,11 @@ class Trainer:
         num_batches = 0
         loss_epoch = 0.0
 
-        self.optimizer.zero_grad(set_to_none=False)
-        detailed_losses_epoch = {key: 0.0 for key in self.detailed_loss_weights}
+        self.optimizer.zero_grad()
 
-        for i, data in enumerate(tqdm(self.dataloader_train, disable=self.rank != 0)):
+        for data in tqdm(self.dataloader_train, disable=self.rank != 0):
 
-            with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=False):
-                losses, _ = self.load_data_compute_loss(data, validation=False)
-                loss = torch.zeros(1, dtype=torch.float32, device=self.device)
-
-                for key, value in losses.items():
-                    loss += self.detailed_loss_weights[key] * value
-                    detailed_losses_epoch[key] += float(self.detailed_loss_weights[key] * float(value.item()))
+            loss, _ = self.load_data_use_model_compute_loss(data, validation=False)
 
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
@@ -74,14 +46,49 @@ class Trainer:
         self.optimizer.zero_grad(set_to_none=True)
         torch.cuda.empty_cache()
     
-        self.log_losses_tensorboard(loss_epoch, detailed_losses_epoch, num_batches, 'train_')
+        self.log_losses_tensorboard(loss_epoch, num_batches, 'train_')
 
-    def load_data_compute_loss(data, validation=False):
-        pass
+    def train_for_epochs(self, epochs):
+        for epoch in range(epochs):
+            if self.rank == 0:
+                print(f"EPOCH {epoch}")
+            self.epoch = epoch
+            self.train()
+            torch.cuda.empty_cache()
 
-    def log_losses_tensorboard(self, loss_epoch, detailed_losses_epoch, num_batches, prefix=''):
+            self.scheduler.step()
+            if self.rank == 0:
+                self.writer.add_scalar('learning_rate', self.optimizer.param_groups[0]['lr'], self.epoch)
+
+
+    def load_data_use_model_compute_loss(self, data, validation=False):
+        # Elements inside the data dict are already tensors! Magic!
+            
+        """
+        for data_folder in config.DATASET_FOLDER_STRUCT:
+            data_name, data_extension = data_folder
+            data[data_name].to(self.device)
+        """
+        source, targets = data
+        source = source.to(self.rank)
+        targets = targets.to(self.rank)
+
+        prediction = self.model(source)
+
+        loss = self.model.module.compute_loss(prediction, targets)
+        difference = prediction-targets
         if self.rank == 0:
-            self.writer.add_scalar(prefix + 'loss_total', loss_epoch / num_batches, self.cur_epoch)
+            self.writer.add_scalar('difference', difference[0].cpu(), self.epoch)
+        # end TMP
 
+        return loss, None
+
+
+    def log_losses_tensorboard(self, loss_epoch, num_batches, prefix=''):
+        if self.rank == 0:
+            self.writer.add_scalar(prefix + 'loss_total', loss_epoch / num_batches, self.epoch)
+            
+            """
             for key, value in detailed_losses_epoch.items():
-                self.writer.add_scalar(prefix + key, value / num_batches, self.cur_epoch)
+                self.writer.add_scalar(prefix + key, value / num_batches, self.epoch)
+            """

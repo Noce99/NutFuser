@@ -7,14 +7,18 @@ class simple_model(nn.Module):
         super().__init__()
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(28*28, 512),
+            nn.Linear(100, 50),
             nn.ReLU(),
-            nn.Linear(512, 512),
+            nn.Linear(50, 10),
             nn.ReLU(),
-            nn.Linear(512, 10),
+            nn.Linear(10, 1),
         )
+        self.loss_function = nn.MSELoss()
 
     def forward(self, x):
-        x = self.flatten(x)
         logits = self.linear_relu_stack(x)
         return logits
+
+    def compute_loss(self, predicted, real):
+        loss = self.loss_function(predicted, real)
+        return loss
