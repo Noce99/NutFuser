@@ -47,8 +47,8 @@ if __name__ == "__main__":
     print(utils.color_info_string(f"I will create {num_of_jobs} job files!"))
     JOBS = [Job(id=i,
                 town=list(config.TOWN_DICT.keys())[i%len(config.TOWN_DICT.keys())],
-                port=2500+i*2,
-                tm_port=(2500+i*2)*2)
+                port=3000+i*5,
+                tm_port=(3000+i*5)*2)
             for i in range(num_of_jobs)]
 
     # ASK CARLA FOLDER
@@ -89,7 +89,7 @@ echo "Selected Port = $PORT"
 while true
 do
 echo "Starting Carla!"
-{CARLAUE4} -RenderOffScreen -nosound -carla-rpc-port=$PORT -opengl &
+{CARLAUE4} -RenderOffScreen -nosound -carla-rpc-port=$PORT --carla-world-port=$PORT -opengl &
 PID_CARLA=$!
 echo "Waiting 60 s!"
 sleep 60
