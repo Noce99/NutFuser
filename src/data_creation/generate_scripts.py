@@ -67,6 +67,13 @@ if __name__ == "__main__":
     NUTFUSER = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 
     # POPULATING scripts_and_jobs FOLDER
+    """
+    FROM CARLA DOCUMENTATIONS:
+    terminal 1: ./CarlaUE4.sh -carla-rpc-port=4000 # simulation A 
+    terminal 2: ./CarlaUE4.sh -carla-rpc-port=5000 # simulation B
+    terminal 3: python3 spawn_npc.py --port 4000 --tm-port 4050 # TM-Server A connected to simulation A
+    terminal 4: python3 spawn_npc.py --port 5000 --tm-port 5050 # TM-Server B connected to simulation B
+    """
     with open(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "launch_data_creation.sh"), "w") as file:
         file.write(
 f"""#!/bin/sh

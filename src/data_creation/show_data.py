@@ -1,8 +1,11 @@
 import pygame
-import config
+import sys
 import os
 import cv2
 import numpy as np
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+import config
 
 BACK_GROUD_COLOR = (0, 0, 255)
 SECTION_TITLE_COLOR = (255, 0, 0)
