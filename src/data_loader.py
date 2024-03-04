@@ -48,8 +48,9 @@ class backbone_dataset(Dataset):
         # TMP
         self.tmp_data = []
         for i in range(self.total_number_of_frames):
-            some_numbers = torch.rand(100)
-            self.tmp_data.append((some_numbers, some_numbers.sum()[None]))
+            some_numbers = torch.rand(10)
+            result = torch.sin(torch.sum(some_numbers[0:3])) + torch.tanh(torch.sum(some_numbers[3:10]))
+            self.tmp_data.append((some_numbers, result[None]))
         #end TMP
 
     def close(self):

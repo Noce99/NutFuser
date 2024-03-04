@@ -3,6 +3,7 @@ import config
 from tqdm import tqdm
 import torch
 import random
+import time
 
 class Trainer:
     def __init__(self,
@@ -49,6 +50,7 @@ class Trainer:
         self.log_losses_tensorboard(loss_epoch, num_batches, 'train_')
 
     def train_for_epochs(self, epochs):
+        self.trainng_start_time = time.time()
         for epoch in range(epochs):
             if self.rank == 0:
                 print(f"EPOCH {epoch}")
@@ -86,7 +88,7 @@ class Trainer:
 
     def log_losses_tensorboard(self, loss_epoch, num_batches, prefix=''):
         if self.rank == 0:
-            self.writer.add_scalar(prefix + 'loss_total', loss_epoch / num_batches, self.epoch)
+            self.writer.add_scalar(prefix + 'loss_total', loss_epoch / num_batches, time.time()-self.trainng_start_time)
             
             """
             for key, value in detailed_losses_epoch.items():

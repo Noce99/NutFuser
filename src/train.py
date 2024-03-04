@@ -87,4 +87,5 @@ def main(rank: int, world_size: int):
 
 if __name__ == "__main__":
     world_size = torch.cuda.device_count()
+    world_size = 2
     torch.multiprocessing.spawn(main, args=(world_size, ), nprocs=world_size)

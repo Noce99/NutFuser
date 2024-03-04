@@ -7,7 +7,7 @@ class simple_model(nn.Module):
         super().__init__()
         self.flatten = nn.Flatten()
         self.linear_relu_stack = nn.Sequential(
-            nn.Linear(100, 50),
+            nn.Linear(10, 50),
             nn.ReLU(),
             nn.Linear(50, 10),
             nn.ReLU(),
