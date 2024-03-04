@@ -127,7 +127,7 @@ def lidar_callback(point_cloud):
     data = np.copy(np.frombuffer(point_cloud.raw_data, dtype=np.dtype('f4')))
     data = np.reshape(data, (int(data.shape[0] / 4), 4))
     data_last_frame[f"lidar"] = lidar_to_histogram_features(data[:, :3])[0]
-    print(f"OCIIOOOOOOO {data_last_frame[f"lidar"]} dovrebbe essere [256, 256]!!!!!!!")
+    print(f"OCIIOOOOOOO {data_last_frame['lidar'].shape} dovrebbe essere [256, 256]!!!!!!!")
 
 # CAMERAS callback
 def rgb_callback(image, number):

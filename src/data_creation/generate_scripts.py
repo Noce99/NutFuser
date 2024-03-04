@@ -93,7 +93,7 @@ python setup_world.py $TOWN
 echo "Waiting 10 s!"
 sleep 10
 echo "Starting generating the traffic!"
-python generate_traffic.py --hero -n 30 -w 30 --respawn --hybrid --tm-port=$TM_PORT &
+python generate_traffic.py --hero -n 30 -w 30 --respawn --hybrid --port=$PORT --tm-port=$TM_PORT &
 PID_TRAFFIC=$!
 echo "Waiting 60 s!"
 sleep 60
