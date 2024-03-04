@@ -68,7 +68,7 @@ for i in range(4):
 
 # Connect the client and set up bp library
 client = carla.Client('localhost', carla_port)
-client.set_timeout(120.0)
+client.set_timeout(20.0)
 world = client.get_world()
 settings = world.get_settings()
 settings.synchronous_mode = True
