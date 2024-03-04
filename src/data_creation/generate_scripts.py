@@ -1,5 +1,6 @@
 import sys
 import os
+import stat
 import shutil
 import collections
 
@@ -81,7 +82,7 @@ echo "Selected Port = $PORT"
 while true
 do
 echo "Starting Carla!"
-{CARLAUE4} -RenderOffScreen -nosound --carla-world-port=$PORT -carla-rpc-port=$TM_PORT &
+{CARLAUE4} -RenderOffScreen -nosound -carla-rpc-port=$PORT &
 PID_CARLA=$!
 echo "Waiting 60 s!"
 sleep 60
@@ -108,6 +109,9 @@ echo "Killed everything!"
 done
 """
         )
+    st = os.stat(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "launch_data_creation.sh"))
+    os.chmod(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "launch_data_creation.sh"), st.st_mode | stat.S_IEXEC) # chmod +x
+
     os.mkdir(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "jobs"))
     os.mkdir(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "logs"))
     for job in JOBS:

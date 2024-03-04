@@ -18,6 +18,8 @@ from get_bbs import get_bbs_as_bev_image
 if len(sys.argv) == 1:
     print("No argumnets I will setup Town15, port 20000 and job_id to 0!")
     town_int = 15
+    carla_port = 20000
+    job_id = 0
 else:
     try:
         town_int = int(sys.argv[1])
@@ -34,7 +36,7 @@ else:
         print("No port given! I will set it to 20000!")
         carla_port = 20000
     else:
-        carla_port = sys.argv[2]
+        carla_port = int(sys.argv[2])
     if len(sys.argv) == 3:
         print("No id given! I will set it to 0!")
         job_id = 0
