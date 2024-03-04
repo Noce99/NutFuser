@@ -298,9 +298,7 @@ for i in range(4):
 now = datetime.now()
 current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
 
-config.DATASET_PATH = os.path.join(config.DATASET_PATH, f"{config.TOWN_DICT[town_int]}_{job_id}")
-os.mkdir(config.DATASET_PATH)
-config.DATASET_PATH = os.path.join(config.DATASET_PATH, current_time)
+config.DATASET_PATH = os.path.join(config.DATASET_PATH, f"{job_id}_{current_time}_{config.TOWN_DICT[town_int]}")
 os.mkdir(config.DATASET_PATH)
 
 rgb_A_folders_name =        [f"rgb_A_{i}"           for i in range(4)]
