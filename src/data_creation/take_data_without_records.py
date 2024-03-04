@@ -15,7 +15,7 @@ import config
 from get_bbs import get_bbs_as_bev_image
 
 if len(sys.argv) == 1:
-    print("No argumnets I will setup Town15!")
+    print("No argumnets I will setup Town15, port 20000 and job_id to 0!")
     town_int = 15
 else:
     try:
@@ -29,6 +29,16 @@ else:
         print(e)
         print(f"The argument was not an integer [{sys.argv[1]}], I will setup Town15!")
         town_int = 15
+    if len(sys.argv) == 2:
+        print("No port given! I will set it to 20000!")
+        carla_port = 20000
+    else:
+        carla_port = sys.argv[2]
+    if len(sys.argv) == 3:
+        print("No id given! I will set it to 0!")
+        job_id = 0
+    else:
+        job_id = sys.argv[3]
 
 data_last_frame = {}
 take_new_data = {}
@@ -54,7 +64,7 @@ for i in range(4):
 #    data_last_frame[f"optical_flow_human_{i}"] = np.zeros((config.IMAGE_H, config.IMAGE_W), dtype=np.uint8)
 
 # Connect the client and set up bp library
-client = carla.Client('localhost', 2000)
+client = carla.Client('localhost', carla_port)
 client.set_timeout(120.0)
 world = client.get_world()
 settings = world.get_settings()

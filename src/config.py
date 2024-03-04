@@ -46,5 +46,5 @@ TRAIN_LOG_DIR = os.path.join(os.getcwd(), "logs")
 REDUCE_LR_FIRST_TIME = 300 # 30
 REDUCE_LR_SECOND_TIME = 600 # 40
 
-
+# TMP
 START_TIME = time.time()
