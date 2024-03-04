@@ -89,7 +89,7 @@ echo "Selected Port = $PORT"
 while true
 do
 echo "Starting Carla!"
-{CARLAUE4} -RenderOffScreen -nosound -carla-rpc-port=$PORT --carla-world-port=$PORT -opengl &
+{CARLAUE4} -RenderOffScreen -nosound -carla-rpc-port=$PORT -opengl &
 PID_CARLA=$!
 echo "Waiting 60 s!"
 sleep 60
