@@ -97,7 +97,7 @@ cd {NUTFUSER}
 source bin/activate
 cd src/data_creation
 echo "Setting up the world!"
-python setup_world.py $TOWN
+python setup_world.py $TOWN $PORT
 echo "Waiting 10 s!"
 sleep 10
 echo "Starting generating the traffic!"

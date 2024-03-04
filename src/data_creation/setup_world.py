@@ -22,8 +22,13 @@ else:
         print(e)
         print(f"The argument was not an integer [{sys.argv[1]}], I will setup Town15!")
         town_int = 15
+    if len(sys.argv) == 2:
+        print("No port given! I will set it to 20000!")
+        carla_port = 20000
+    else:
+        carla_port = int(sys.argv[2])
 
-client = carla.Client('localhost', 2000)
+client = carla.Client('localhost', carla_port)
 client.set_timeout(240.0)
 world = client.load_world(config.TOWN_DICT[town_int])
 config.SELECTED_TOWN_NAME = config.TOWN_DICT[town_int]
