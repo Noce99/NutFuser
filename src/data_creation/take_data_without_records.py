@@ -10,6 +10,7 @@ import numpy as np
 import cv2
 from datetime import datetime
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import config
 
 from get_bbs import get_bbs_as_bev_image
