@@ -19,7 +19,7 @@ BEV_BOTTOM_FOV_IN_DEGREES = (2 * math.atan(BEV_SQUARE_SIDE_IN_M / (2 * BEV_BOTTO
 AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE = 30 # minimum is 3
 TOWN_DICT = {1:  "Town01_Opt", 2:  "Town02_Opt", 3:  "Town03_Opt", 4:  "Town04_Opt",
              5:  "Town05_Opt", 6:  "Town06_Opt", 7:  "Town07_Opt", 10: "Town10HD_Opt",
-             11: "Town11",     13: "Town13",     15: "Town15"}
+             11: "Town12",     13: "Town13",     15: "Town15"}
 SELECTED_TOWN_NAME = "Town15"
 
 # DATA LOADER
