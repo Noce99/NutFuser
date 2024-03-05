@@ -567,32 +567,3 @@ class GlobalConfig:
       raise ValueError(f'Error: Selected setting: {setting} does not exist.')
 
     print('Setting: ', setting)
-    self.train_towns = os.listdir(self.root_dir)  # Scenario Folders
-    self.val_towns = self.train_towns
-    self.train_data, self.val_data = [], []
-    for town in self.train_towns:
-      root_files = os.listdir(os.path.join(self.root_dir, town))  # Town folders
-      for file in root_files:
-        # Only load as many repetitions as specified
-        repetition = int(re.search('Repetition(\\d+)', file).group(1))
-        if repetition >= self.num_repetitions:
-          continue
-        # We don't train on two towns and reserve them for validation
-        if ((file.find(first_val_town) != -1) or (file.find(second_val_town) != -1)):
-          continue
-        if not os.path.isfile(os.path.join(self.root_dir, file)):
-          self.train_data.append(os.path.join(self.root_dir, town, file))
-    for town in self.val_towns:
-      root_files = os.listdir(os.path.join(self.root_dir, town))
-      for file in root_files:
-        repetition = int(re.search('Repetition(\\d+)', file).group(1))
-        if repetition >= self.num_repetitions:
-          continue
-        # Only use withheld towns for validation
-        if ((file.find(first_val_town) == -1) and (file.find(second_val_town) == -1)):
-          continue
-        if not os.path.isfile(os.path.join(self.root_dir, file)):
-          self.val_data.append(os.path.join(self.root_dir, town, file))
-
-    if setting == 'all':
-      self.val_data.append(self.train_data[0])  # Dummy

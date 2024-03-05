@@ -5,6 +5,7 @@ share/
 _out/
 include/
 src/neural_networks/train_logs/
+src/neural_networks/tf++/nut_tmp
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

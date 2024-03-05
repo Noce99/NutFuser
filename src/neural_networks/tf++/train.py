@@ -25,7 +25,6 @@ import cv2
 from config import GlobalConfig
 from model import LidarCenterNet
 from nut_data import backbone_dataset
-from plant import PlanT
 
 import pathlib
 import datetime
@@ -77,6 +76,7 @@ def main():
                       '04_06_withheld: Do not train on Town 04 and Town 06. '
                       'Withheld data is used for validation')
   parser.add_argument('--root_dir', type=str, required=True, help='Root directory of your training data')
+  parser.add_argument('--val_dir', type=str, required=True, help='Root directory of your validation data')
   parser.add_argument('--schedule_reduce_epoch_01',
                       type=int,
                       default=config.schedule_reduce_epoch_01,
@@ -456,19 +456,17 @@ def main():
       config.detailed_loss_weights[k] = config.detailed_loss_weights[k] * factor
 
   # Data, configures config. Create before the model
-  train_set = backbone_dataset(rank=rank)
+
+  train_set = backbone_dataset(rank=rank, dataset_path=args.root_dir, use_cache=True)
   
-  val_set = backbone_dataset(rank=rank)
+  val_set = backbone_dataset(rank=rank, dataset_path=args.val_dir, use_cache=False)
 
   if rank == 0:
     print('Target speed weights: ', config.target_speed_weights, flush=True)
     print('Angle weights: ', config.angle_weights, flush=True)
 
   # Create model and optimizers
-  if config.use_plant:
-    model = PlanT(config)
-  else:
-    model = LidarCenterNet(config) # THIS
+  model = LidarCenterNet(config)
 
   # Register loss weights as parameters of the model if we learn them
   if args.learn_multi_task_weights:
@@ -605,6 +603,7 @@ def main():
                    dataloader_train=dataloader_train,
                    dataset_train=train_set,
                    dataloader_val=dataloader_val,
+                   dataset_val=val_set,
                    args=args,
                    config=config,
                    writer=writer,
@@ -622,16 +621,12 @@ def main():
 
     trainer.nut_validation()
     torch.cuda.empty_cache()
+    trainer.validate()
+    torch.cuda.empty_cache()
     trainer.train()
     torch.cuda.empty_cache()
 
-    if ((args.setting != 'all') and (epoch % args.val_every == 0)):
-      # trainer.validate()
-      # torch.cuda.empty_cache()
-      pass
-
-    if not config.use_cosine_schedule:
-      scheduler.step()
+    scheduler.step()
 
     if bool(args.zero_redundancy_optimizer):
       # To save the whole optimizer we need to gather it on GPU 0.
@@ -653,6 +648,7 @@ class Engine(object):
                dataloader_train,
                dataset_train,
                dataloader_val,
+               dataset_val,
                args,
                config,
                writer,
@@ -672,6 +668,7 @@ class Engine(object):
     self.dataloader_train = dataloader_train
     self.dataset_train = dataset_train
     self.dataloader_val = dataloader_val
+    self.dataset_val = dataset_val
     self.args = args
     self.config = config
     self.writer = writer
@@ -760,7 +757,7 @@ class Engine(object):
                           pred_wp_1=pred_wp_1,
                           selected_path=selected_path)
     self.step += 1
-    return losses, None
+    return losses
 
   def train(self):
     self.model.train()
@@ -774,7 +771,7 @@ class Engine(object):
     for i, data in enumerate(tqdm(self.dataloader_train, disable=self.rank != 0)):
 
       with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=bool(self.config.use_amp)):
-        losses, _ = self.load_data_compute_loss(data, validation=False)
+        losses = self.load_data_compute_loss(data, validation=False)
         loss = torch.zeros(1, dtype=torch.float32, device=self.device)
 
         for key, value in losses.items():
@@ -815,7 +812,7 @@ class Engine(object):
     self.model.eval()
     print("Creating Visual Evaluation Data!")
 
-    some_random_idxs = random.sample(range(1, len(self.dataset_train)), 10)
+    some_random_idxs = random.sample(range(1, len(self.dataset_val)), 10)
     
     folder_path = os.path.join(self.args.logdir, "visual_validation", str(self.nut_validation_i))
     self.nut_validation_i += 1
@@ -823,7 +820,7 @@ class Engine(object):
 
     k = 0
     for idx in some_random_idxs:
-      data = self.dataset_train[idx]
+      data = self.dataset_val[idx]
       target_point = None
       command = None
       ego_vel = None
@@ -877,7 +874,7 @@ class Engine(object):
 
     # Evaluation loop loop
     for data in tqdm(self.dataloader_val, disable=self.rank != 0):
-      losses, metrics = self.load_data_compute_loss(data, validation=True)
+      losses = self.load_data_compute_loss(data, validation=True)
 
       loss = torch.zeros(1, dtype=torch.float32, device=self.device)
 
@@ -891,14 +888,10 @@ class Engine(object):
           loss += self.detailed_loss_weights[key] * value
           detailed_val_losses_epoch[key] += float(self.detailed_loss_weights[key] * float(value.item()))
 
-      for key, value in metrics.items():
-        detailed_val_losses_epoch[key] += float(value)
-
       num_batches += 1
       loss_epoch += float(loss.item())
 
       del losses
-      del metrics
 
     self.log_losses(loss_epoch, detailed_val_losses_epoch, num_batches, 'val_')
 

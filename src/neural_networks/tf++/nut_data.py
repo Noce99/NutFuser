@@ -19,7 +19,7 @@ import torch
 DataFolder = collections.namedtuple('DataFolder', ['path', 'elements'])
 
 class backbone_dataset(Dataset):
-    def __init__(self, rank):
+    def __init__(self, rank, dataset_path, use_cache=True):
         self.rank = rank
 
         self.cache = None
@@ -33,6 +33,11 @@ class backbone_dataset(Dataset):
         self.data_should_be_in_cache = None
         self.data_already_in_cache = None
         # end
+        self.dataset_path = dataset_path
+        if use_cache:
+            self.cache_size_limit = nut_config.CACHE_SIZE_LIMIT
+        else:
+            self.cache_size_limit = 0
 
         self.set_up_cache()
         self.total_number_of_frames = self.check_dataset_and_get_data_folders()
@@ -65,8 +70,8 @@ class backbone_dataset(Dataset):
                 os.mkdir(nut_config.JOB_TMP_DIR)
             else:
                 os.mkdir(nut_config.JOB_TMP_DIR)
-            print(f"CACHE PATH is '{nut_config.JOB_TMP_DIR}' [size_limit={int(nut_config.CACHE_SIZE_LIMIT/1e9)} GB]")
-        self.cache = Cache(directory=nut_config.JOB_TMP_DIR, size_limit=nut_config.CACHE_SIZE_LIMIT)
+            print(f"CACHE PATH is '{nut_config.JOB_TMP_DIR}' [size_limit={int(self.cache_size_limit/1e9)} GB]")
+        self.cache = Cache(directory=nut_config.JOB_TMP_DIR, size_limit=self.cache_size_limit)
 
     def clean_cache(self):
         if self.rank == 0:
@@ -75,7 +80,7 @@ class backbone_dataset(Dataset):
                 shutil.rmtree(nut_config.JOB_TMP_DIR)
     
     def check_dataset_and_get_data_folders(self):
-        if not os.path.isdir(nut_config.DATASET_PATH):
+        if not os.path.isdir(self.dataset_path):
             raise Exception(nut_utils.color_error_string("No Dataset folder found!"))
         
         def check_that_all_sensors_have_the_same_ammount_of_frame(data_folder_path):
@@ -91,7 +96,7 @@ class backbone_dataset(Dataset):
             return number_of_frames
 
         total_number_of_frames = 0
-        for root, dirs, files in os.walk(nut_config.DATASET_PATH, topdown=False):
+        for root, dirs, files in os.walk(self.dataset_path, topdown=False):
             if len(dirs) == 0:
                 continue
             good = True
@@ -104,10 +109,10 @@ class backbone_dataset(Dataset):
             elements = check_that_all_sensors_have_the_same_ammount_of_frame(root)
             total_number_of_frames += elements
             # In the following I'm assuming that the folder containing all the data
-            # (ex: 25_02_2024_21:20:57) is a direct child of nut_config.DATASET_PATH!
+            # (ex: 25_02_2024_21:20:57) is a direct child of self.dataset_path!
             head, tail = os.path.split(root)
-            if os.path.normpath(head) != os.path.normpath(nut_config.DATASET_PATH):
-                raise Exception(nut_utils.color_error_string(f"The folder '{root}' is a valid dataset subfolder but it's not a direct child of '{nut_config.DATASET_PATH}'!"))               
+            if os.path.normpath(head) != os.path.normpath(self.dataset_path):
+                raise Exception(nut_utils.color_error_string(f"The folder '{root}' is a valid dataset subfolder but it's not a direct child of '{self.dataset_path}'!"))               
             self.data_folders.append(DataFolder(tail, elements))
             if self.max_chars_data_folder_name_lenght is None:
                 self.max_chars_data_folder_name_lenght = len(tail)
@@ -121,7 +126,7 @@ class backbone_dataset(Dataset):
             return None
         a_data_folder = self.data_folders[0]
         total_size = 0
-        for root, dirs, files in os.walk(os.path.join(nut_config.DATASET_PATH, a_data_folder.path), topdown=False):
+        for root, dirs, files in os.walk(os.path.join(self.dataset_path, a_data_folder.path), topdown=False):
             if root == a_data_folder.path:
                 continue
             for file in files:
@@ -141,16 +146,16 @@ class backbone_dataset(Dataset):
     
     def get_last_frames_to_put_in_cache(self):
         self.bytes_that_I_need = self.bytes_per_frame*self.total_number_of_frames
-        # I add 1 % for stay safe!
+        # I add 5 % for stay safe!
         self.bytes_that_I_need += int(0.05*self.bytes_per_frame*self.total_number_of_frames)
-        if nut_config.CACHE_SIZE_LIMIT > self.bytes_that_I_need:
+        if self.cache_size_limit > self.bytes_that_I_need:
             return self.total_number_of_frames
-        return  int((nut_config.CACHE_SIZE_LIMIT / self.bytes_that_I_need) * self.total_number_of_frames)
+        return  int((self.cache_size_limit / self.bytes_that_I_need) * self.total_number_of_frames)
 
     def print_memory_summary_table(self):
         a_table_head = ["Memory Summary", "Size", "%", "Limit"]
         a_table = [
-            ["CACHE that I will Use", f"{self.last_frame_in_cache*self.bytes_per_frame/1e9:.2f} GB", f"{self.last_frame_in_cache/self.total_number_of_frames*100:.2f} %", f"{nut_config.CACHE_SIZE_LIMIT/1e9:.2f} GB"],
+            ["CACHE that I will Use", f"{self.last_frame_in_cache*self.bytes_per_frame/1e9:.2f} GB", f"{self.last_frame_in_cache/self.total_number_of_frames*100:.2f} %", f"{self.cache_size_limit/1e9:.2f} GB"],
             ["SLOW MEMORY that I will Use", f"{(self.total_number_of_frames-self.last_frame_in_cache)*self.bytes_per_frame/1e9:.2f} GB", f"{(self.total_number_of_frames-self.last_frame_in_cache)/self.total_number_of_frames*100:.2f} %"], 
             ["TOTAL that I Need", f"{self.bytes_per_frame*self.total_number_of_frames/1e9:.2f} GB", ""],
             ["RAM that I will Use for storing data retrival info", f"{self.ram_for_stooring_data_retrival_information/1e6:.2f} MB", ""]
@@ -185,7 +190,7 @@ class backbone_dataset(Dataset):
         return self.total_number_of_frames
     
     def __getitem__(self, idx):
-        path = os.path.join(nut_config.DATASET_PATH, self.data_path[idx])
+        path = os.path.join(self.dataset_path, self.data_path[idx])
         id = self.data_id[idx]
         data_should_be_in_cache = self.data_should_be_in_cache[idx]
         data_already_in_cache = self.data_already_in_cache[idx]
@@ -193,7 +198,7 @@ class backbone_dataset(Dataset):
             data = {}
             for data_folder in nut_config.DATASET_FOLDER_STRUCT:
                 data_name, data_extension = data_folder
-                data[data_name] = cv2.imread(os.path.join(nut_config.DATASET_PATH, path, data_name, f"{id}{data_extension}"))
+                data[data_name] = cv2.imread(os.path.join(self.dataset_path, path, data_name, f"{id}{data_extension}"))
             if data_should_be_in_cache:
                 data_compressed = {}
                 for data_folder in nut_config.DATASET_FOLDER_STRUCT:
