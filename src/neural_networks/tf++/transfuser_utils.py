@@ -4,6 +4,8 @@ Functions for detecting red lights are adapted from scenario runners
 atomic_criteria.py
 """
 import math
+import sys
+sys.path.append("/home/enrico/Progetti/Carla/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
 import carla
 import numpy as np
 import torch

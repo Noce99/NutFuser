@@ -84,16 +84,17 @@ class backbone_dataset(Dataset):
             raise Exception(nut_utils.color_error_string("No Dataset folder found!"))
         
         def check_that_all_sensors_have_the_same_ammount_of_frame(data_folder_path):
-            number_of_frames = None        
+            min_number_of_frames = None              
             for data_subfolder in nut_config.DATASET_FOLDER_STRUCT:
                 subfolder_to_check = os.path.join(data_folder_path, data_subfolder[0])
                 files = os.listdir(subfolder_to_check)
-                if number_of_frames is None:
-                    number_of_frames = len(files)
+                if min_number_of_frames is None:
+                    min_number_of_frames = len(files)
                 else:
-                    if len(files) != number_of_frames:
-                        raise Exception(nut_utils.color_error_string(f"The folder '{root}' has {len(files)} files instead of {number_of_frames}!"))
-            return number_of_frames
+                    if len(files) < min_number_of_frames:
+                        min_number_of_frames = len(files)
+                        # raise Exception(nut_utils.color_error_string(f"The folder '{root}' has {len(files)} files instead of {number_of_frames}!"))
+            return min_number_of_frames
 
         total_number_of_frames = 0
         for root, dirs, files in os.walk(self.dataset_path, topdown=False):
