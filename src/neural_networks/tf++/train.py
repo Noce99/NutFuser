@@ -620,8 +620,11 @@ def main():
     # sampler will use different shuffles across different epochs
     sampler_train.set_epoch(epoch)
 
-    trainer.nut_validation()
-    torch.cuda.empty_cache()
+    if rank == 0:
+      trainer.nut_validation()
+      torch.cuda.empty_cache()
+    else:
+      time.sleep(1)
     trainer.validate()
     torch.cuda.empty_cache()
     trainer.train()
