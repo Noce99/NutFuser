@@ -28,6 +28,7 @@ from nut_data import backbone_dataset
 
 import pathlib
 import datetime
+import time
 import random
 import pickle
 
@@ -683,8 +684,11 @@ class Engine(object):
     self.tensor_board_i = 0
     self.nut_validation_i = 0
 
-    visual_validation_path = os.path.join(self.args.logdir, "visual_validation")
-    os.mkdir(visual_validation_path)
+    if rank == 0:
+      visual_validation_path = os.path.join(self.args.logdir, "visual_validation")
+      os.mkdir(visual_validation_path)
+    else:
+      time.sleep(1)
 
     if self.config.debug:
       pathlib.Path(self.vis_save_path).mkdir(parents=True, exist_ok=True)
