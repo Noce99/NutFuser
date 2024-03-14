@@ -54,7 +54,7 @@ class LidarCenterNet(nn.Module):
       OUTPUT_VIDEO = cv2.VideoWriter(f"/home/enrico/Projects/Carla/carla_garage/output_video_evaluation/{file_name}", fourcc, 15, (1576, 828))
     self.config = config
 
-    self.data = CARLA_Data(root=[], config=self.config, shared_dict=None)
+    # self.data = CARLA_Data(root=[], config=self.config, shared_dict=None)
 
     self.speed_histogram = []
     self.make_histogram = int(os.environ.get('HISTOGRAM', 0))

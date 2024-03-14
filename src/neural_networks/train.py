@@ -1,13 +1,16 @@
+import sys
+import pathlib
+sys.path.append(str(pathlib.Path(__file__).parent.resolve().parent.resolve()))
 import config
 import utils
 from data_loader import backbone_dataset
-from model import simple_model
+from model import LidarCenterNet
 from trainer import Trainer
+from tfpp_config import GlobalConfig
 
 import torch
 from torch.distributed.optim import ZeroRedundancyOptimizer
 from torch import optim
-from torch.utils.tensorboard import SummaryWriter
 import json
 import pickle
 import os
@@ -24,12 +27,12 @@ def seed_worker(worker_id):
 
 def main(rank: int, world_size: int):
     os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "12355"
+    os.environ["MASTER_PORT"] = "19991"
     torch.distributed.init_process_group(
         backend="nccl", rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
     my_dataset = backbone_dataset(rank)
-    my_model = simple_model()
+    my_model = LidarCenterNet(GlobalConfig())
     optimizer = ZeroRedundancyOptimizer(
         my_model.parameters(),
         optimizer_class=optim.AdamW,
@@ -66,7 +69,7 @@ def main(rank: int, world_size: int):
             os.makedirs(os.path.join(os.getcwd(), "train_logs"))
         log_dir = os.path.join(os.getcwd(), "train_logs", f"logs_{current_time}")
         os.makedirs(log_dir)
-        writer = SummaryWriter(log_dir=log_dir)
+
         with open(os.path.join(log_dir, 'args.txt'), 'w', encoding='utf-8') as f:
             json.dump("I should write all the args there! Since now I waas to lazy!", f, indent=2)
         with open(os.path.join(log_dir, 'config.pickle'), 'wb') as f2:
@@ -78,14 +81,15 @@ def main(rank: int, world_size: int):
                 model,
                 optimizer,
                 dataloader_train,
+                my_dataset,
                 scheduler,
                 scaler,
                 rank,
-                writer)
+                log_dir)
     trainer.train_for_epochs(100)
     my_dataset.close()
 
 if __name__ == "__main__":
     world_size = torch.cuda.device_count()
-    world_size = 2
+    # world_size = 2
     torch.multiprocessing.spawn(main, args=(world_size, ), nprocs=world_size)

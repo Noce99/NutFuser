@@ -4,6 +4,7 @@ import time
 
 # GENERAL
 DATASET_PATH = "/home/enrico/Downloads/nut_dataset_old" # "/leonardo_work/IscrC_SSNeRF/nut_dataset"
+VALIDATION_DATASET_PATH = "/home/enrico/Downloads/nut_dataset_old/nut_dataset_old_val"
 
 # TAKE DATA
 IMAGE_W = 1024
@@ -31,10 +32,10 @@ DATASET_FOLDER_STRUCT = [("rgb_A_0", ".jpg"),           ("rgb_A_1", ".jpg"),    
                          ("optical_flow_0", ".png"),    ("optical_flow_1", ".png"), ("optical_flow_2", ".png"), ("optical_flow_3", ".png"),
                          ("semantic_0", ".png"),        ("semantic_1", ".png"),     ("semantic_2", ".png"),     ("semantic_3", ".png"),
                          ("bev_semantic", ".png"),      ("bev_lidar", ".png")]
-CACHE_SIZE_LIMIT =  int(0.1 * 1e9) # Bytes (GB without the 1e9)
+CACHE_SIZE_LIMIT =  0 # int(0.1 * 1e9) # Bytes (GB without the 1e9)
 
 # TRAIN
-BATCH_SIZE = 8
+BATCH_SIZE = 10
 LEARNING_RATE = 7.5e-5
 LEARNING_RATE_DECAY = 0.1
 START_EPOCH = 0
@@ -43,8 +44,8 @@ PRETRAINED_OPTIMIZER_PATH = None
 PRETRAINED_SCHEDULER_PATH = None
 PRETRAINED_SCALER_PATH = None
 TRAIN_LOG_DIR = os.path.join(os.getcwd(), "logs")
-REDUCE_LR_FIRST_TIME = 300 # 30
-REDUCE_LR_SECOND_TIME = 600 # 40
+REDUCE_LR_FIRST_TIME = 30
+REDUCE_LR_SECOND_TIME = 40
 
 # TMP
 START_TIME = time.time()

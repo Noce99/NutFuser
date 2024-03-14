@@ -45,14 +45,6 @@ class backbone_dataset(Dataset):
             self.print_memory_summary_table()
         del self.data_folders
 
-        # TMP
-        self.tmp_data = []
-        for i in range(self.total_number_of_frames):
-            some_numbers = torch.rand(10)
-            result = torch.sin(torch.sum(some_numbers[0:3])) + torch.tanh(torch.sum(some_numbers[3:10]))
-            self.tmp_data.append((some_numbers, result[None]))
-        #end TMP
-
     def close(self):
         self.clean_cache()
 
@@ -182,7 +174,7 @@ class backbone_dataset(Dataset):
             for ii in range(data_folder.elements):
                 self.data_path[index] = data_folder.path
                 self.data_id[index] = ii
-                if index <= self.last_frame_in_cache:
+                if index < self.last_frame_in_cache:
                     self.data_should_be_in_cache[index] = True
                 else:
                     self.data_should_be_in_cache[index] = False
@@ -193,11 +185,6 @@ class backbone_dataset(Dataset):
         return self.total_number_of_frames
     
     def __getitem__(self, idx):
-
-        # TMP
-        return self.tmp_data[idx]
-        # end TMP
-
         path = os.path.join(config.DATASET_PATH, self.data_path[idx])
         id = self.data_id[idx]
         data_should_be_in_cache = self.data_should_be_in_cache[idx]
@@ -207,6 +194,8 @@ class backbone_dataset(Dataset):
             for data_folder in config.DATASET_FOLDER_STRUCT:
                 data_name, data_extension = data_folder
                 data[data_name] = cv2.imread(os.path.join(config.DATASET_PATH, path, data_name, f"{id}{data_extension}"))
+                if data[data_name] is None:
+                    print(utils.color_error_string(f"{os.path.join(config.DATASET_PATH, path, data_name, f'{id}{data_extension}')} is NULL!"))
             if data_should_be_in_cache:
                 data_compressed = {}
                 for data_folder in config.DATASET_FOLDER_STRUCT:
@@ -221,6 +210,14 @@ class backbone_dataset(Dataset):
             for data_folder in config.DATASET_FOLDER_STRUCT:
                 data_name, data_extension = data_folder
                 data[data_name] = cv2.imdecode(data_compressed[data_name], cv2.IMREAD_UNCHANGED)
+                if data[data_name] is None:
+                    print(utils.color_error_string(f"in CACHE is NULL!"))
+        for key in data:
+            if data[key] is None:
+                if idx > 0:
+                    return self.__getitem__(idx-1)
+                else:
+                    return self.__getitem__(idx+1)
         return data
 
 
