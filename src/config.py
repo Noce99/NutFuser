@@ -21,7 +21,7 @@ AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE = 30 # minimum is 3
 MAX_NUM_OF_SAVED_FRAME = 10
 TOWN_DICT = {1:  "Town01_Opt", 2:  "Town02_Opt", 3:  "Town03_Opt", 4:  "Town04_Opt",
              5:  "Town05_Opt", 6:  "Town06_Opt", 7:  "Town07_Opt", 10: "Town10HD_Opt",
-             11: "Town12",     13: "Town13",     15: "Town15"}
+             12: "Town12",     13: "Town13",     15: "Town15"}
 SELECTED_TOWN_NAME = "Town15"
 
 # DATA LOADER

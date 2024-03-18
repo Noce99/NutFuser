@@ -1,7 +1,6 @@
 import sys
-sys.path.append("/leonardo_work/IscrC_SSNeRF/CARLA_0.9.15/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
-sys.path.append("/home/enrico/Progetti/Carla/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
-import carla 
+# sys.path.append("/leonardo_work/IscrC_SSNeRF/CARLA_0.9.15/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
+# sys.path.append("/home/enrico/Progetti/Carla/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
 import os
 import math
 import shutil
@@ -15,7 +14,14 @@ from tqdm import tqdm
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import config
 
-def take_data_backbone(town_id, rpc_port, job_id, ego_vehicle_found_event, starting_data_loop_event, finished_taking_data_event):
+def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_found_event, starting_data_loop_event, finished_taking_data_event):
+    
+    sys.path.append(carla_egg_path)
+    try:
+        import carla
+    except:
+        pass
+    
     data_last_frame = {}
     take_new_data = {}
     data_last_frame["lidar"] = np.zeros((config.BEV_IMAGE_H, config.BEV_IMAGE_W), dtype=np.uint8)
@@ -81,8 +87,8 @@ def take_data_backbone(town_id, rpc_port, job_id, ego_vehicle_found_event, start
             MAX_HIST_POINTS = 5
             def splat_points(point_cloud):
                 # 256 x 256 grid
-                xbins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_IMAGE_W)
-                ybins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_IMAGE_H)
+                xbins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_IMAGE_W+1)
+                ybins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_IMAGE_H+1)
                 hist = np.histogramdd(point_cloud[:, :2], bins=(xbins, ybins))[0]
                 hist[hist > MAX_HIST_POINTS] = MAX_HIST_POINTS
                 overhead_splat = hist / MAX_HIST_POINTS
@@ -105,7 +111,6 @@ def take_data_backbone(town_id, rpc_port, job_id, ego_vehicle_found_event, start
             data = np.copy(np.frombuffer(point_cloud.raw_data, dtype=np.dtype('f4')))
             data = np.reshape(data, (int(data.shape[0] / 4), 4))
             data_last_frame[f"lidar"] = lidar_to_histogram_features(data[:, :3])[0]
-            print(f"OCIIOOOOOOO {data_last_frame['lidar'].shape} dovrebbe essere [256, 256]!!!!!!!")
             take_new_data[f"lidar"] = False
         
     # CAMERAS callback
@@ -401,6 +406,7 @@ def take_data_backbone(town_id, rpc_port, job_id, ego_vehicle_found_event, start
     with tqdm(total=config.MAX_NUM_OF_SAVED_FRAME*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE) as pbar:
         pbar.update(1)
         while True:
+            #
             if carla_frame == 0:
                 for key_take_new_data in take_new_data:
                     if key_take_new_data[:3] == "rgb":

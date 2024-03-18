@@ -5,9 +5,9 @@ import os
 import sys
 import time
 
-sys.path.append("/leonardo_work/IscrC_SSNeRF/CARLA_0.9.15/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
-sys.path.append("/home/enrico/Progetti/Carla/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
-import carla
+# sys.path.append("/leonardo_work/IscrC_SSNeRF/CARLA_0.9.15/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
+# sys.path.append("/home/enrico/Progetti/Carla/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
+# sys.path.append("/home/enrico/Projects/Carla/LEADERBOARD_STUFF_SECOND_ATTEMPTS/CARLA_Leaderboard_2.0/PythonAPI/carla/dist/carla-0.9.14-py3.7-linux-x86_64.egg")
 
 import argparse
 import logging
@@ -132,8 +132,20 @@ def main():
         action='store_true',
         default=False,
         help='Activate no rendering mode')
+    argparser.add_argument(
+        '--egg_file_path',
+        help='Path to the Carla Egg File!',
+        required=True,
+        type=str
+    )
 
     args = argparser.parse_args()
+
+    sys.path.append(args.egg_file_path)
+    try:
+        import carla
+    except:
+        pass
 
     logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
 

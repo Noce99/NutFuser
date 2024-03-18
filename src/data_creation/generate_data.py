@@ -131,11 +131,11 @@ def start_up_carla_server(args, carla_server_is_up, process_to_kill):
         if return_code is not None:
             break
 
-def set_up_traffic_manager(args, traffic_manager_is_up):
+def set_up_traffic_manager(args, egg_file_path, traffic_manager_is_up):
     print("Setting up Traffic Manager...")
     generate_traffic_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "generate_traffic.py")
     tm_process = subprocess.Popen(
-        ["python", f"{generate_traffic_path}", "--hero", "-n=30", "-w=30", "--respawn", "--hybrid", f"--port={args.rpc_port}", f"--tm-port={args.tm_port}"], 
+        ["python", f"{generate_traffic_path}", "--hero", "-n=30", "-w=30", "--respawn", "--hybrid", f"--port={args.rpc_port}", f"--tm-port={args.tm_port}", f"--egg_file_path={egg_file_path}"], 
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         universal_newlines=True
@@ -157,7 +157,7 @@ def setup_world(args):
     print("Setting up the world...")
     client = carla.Client(args.carla_ip, args.rpc_port)
     client.set_timeout(20.0)
-    world = client.load_world(config.TOWN_DICT[args.town])
+    client.load_world(config.TOWN_DICT[args.town])
     print("World setted up!")
 
 if __name__ == "__main__":
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     
     # (4) SET UP TRAFFIC MANAGER
     traffic_manager_is_up = multiprocessing.Event()
-    set_up_traffic_manager_process = multiprocessing.Process(target=set_up_traffic_manager, args=(args, traffic_manager_is_up))
+    set_up_traffic_manager_process = multiprocessing.Process(target=set_up_traffic_manager, args=(args, egg_file_path, traffic_manager_is_up))
     set_up_traffic_manager_process.start()
 
     while True:
@@ -225,7 +225,7 @@ if __name__ == "__main__":
     starting_data_loop_event = multiprocessing.Event()
     finished_taking_data_event = multiprocessing.Event()
     data_creation_process = multiprocessing.Process(target=take_data_without_records.take_data_backbone,
-                                                    args=(args.town, args.rpc_port, args.job_id,
+                                                    args=(egg_file_path, args.town, args.rpc_port, args.job_id,
                                                           ego_vehicle_found_event, starting_data_loop_event,
                                                           finished_taking_data_event))
     data_creation_process.start()
