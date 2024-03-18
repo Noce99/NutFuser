@@ -126,6 +126,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             depth.convert(carla.ColorConverter.LogarithmicDepth)
             depth = np.reshape(np.copy(depth.raw_data), (depth.height, depth.width, 4))
             data_last_frame[f"depth_{number}"] = depth[: , :, 0]
+            
 
     # SEMATIC callback
     def semantic_callback(semantic, number):
@@ -174,7 +175,8 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             bev_semantic = cv2.resize(bev_semantic, (config.BEV_IMAGE_H, config.BEV_IMAGE_W), interpolation= cv2.INTER_NEAREST_EXACT)
             data_last_frame["bottom_bev_semantic"] = np.flip(bev_semantic, 1)
 
-
+    def gps_callback(data):
+        print(data)
 
     # LIDAR
     lidar_bp = bp_lib.find('sensor.lidar.ray_cast') 
@@ -226,7 +228,9 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     bottom_bev_semantic_bp.set_attribute("image_size_x", f"{config.BEV_IMAGE_W*4}")
     bottom_bev_semantic_bp.set_attribute("image_size_y", f"{config.BEV_IMAGE_H*4}")
 
-    # Amazing CAMERAS
+    # GPS
+    gps_bp = bp_lib.find("sensor.other.gnss")
+
     transformations = []
 
     # Obvious CAMERAS
@@ -254,6 +258,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         sensors[f"depth_{i}"] = world.spawn_actor(depth_bp, transformations[i], attach_to=hero)
         sensors[f"semantic_{i}"] = world.spawn_actor(semantic_bp, transformations[i], attach_to=hero)
         sensors[f"optical_flow_{i}"] = world.spawn_actor(optical_flow_bp, transformations[i], attach_to=hero)
+    sensors["gps"] = world.spawn_actor(gps_bp, lidar_init_trans, attach_to=hero)
 
     # Connect Sensor and Callbacks
     sensors["lidar"].listen(lambda data: lidar_callback(data))
@@ -264,6 +269,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         sensors[f"depth_{i}"].listen(lambda depth, i=i: depth_callback(depth, i))
         sensors[f"semantic_{i}"].listen(lambda semantic, i=i: semantic_callback(semantic, i))
         sensors[f"optical_flow_{i}"].listen(lambda optical_flow, i=i: optical_flow_callback(optical_flow, i))
+    sensors["gps"].listen(lambda data: gps_callback(data))
     # world.on_tick(lambda world_snapshot: bbs_callback(world_snapshot)) # On Tick callback for bounding boxes
 
     # Create Directory Branches
@@ -397,6 +403,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     carla_frame = 0
     saved_frame = 0
+    gps_positions = []
     world.tick()
     for key_take_new_data in take_new_data:
                 take_new_data[key_take_new_data] = True
@@ -406,7 +413,6 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     with tqdm(total=config.MAX_NUM_OF_SAVED_FRAME*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE) as pbar:
         pbar.update(1)
         while True:
-            #
             if carla_frame == 0:
                 for key_take_new_data in take_new_data:
                     if key_take_new_data[:3] == "rgb":
