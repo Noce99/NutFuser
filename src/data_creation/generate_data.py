@@ -8,6 +8,7 @@ import random
 import signal
 
 import take_data_without_records
+from generate_traffic_new import generate_traffic
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import utils
 import config
@@ -131,28 +132,6 @@ def start_up_carla_server(args, carla_server_is_up, process_to_kill):
         if return_code is not None:
             break
 
-def set_up_traffic_manager(args, egg_file_path, traffic_manager_is_up):
-    print("Setting up Traffic Manager...")
-    generate_traffic_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "generate_traffic.py")
-    tm_process = subprocess.Popen(
-        ["python", f"{generate_traffic_path}", "--hero", "-n=30", "-w=30", "--respawn", "--hybrid", f"--port={args.rpc_port}", f"--tm-port={args.tm_port}", f"--egg_file_path={egg_file_path}"], 
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        universal_newlines=True
-    )
-    # We will wait Traffic Manager to start up!
-    time.sleep(20)
-    return_code = tm_process.poll()
-    if return_code is not None:
-        # The Carla process died before starting up!
-        raise Exception(utils.color_error_string(f"The Traffic Manager process died while starting up!"))
-    traffic_manager_is_up.set()
-    # I will run this function to take care when Traffic Manager die!
-    while True:
-        return_code = tm_process.poll()
-        if return_code is not None:
-            return return_code
-
 def setup_world(args):
     print("Setting up the world...")
     client = carla.Client(args.carla_ip, args.rpc_port)
@@ -199,8 +178,9 @@ if __name__ == "__main__":
             break
     
     # (4) SET UP TRAFFIC MANAGER
+    you_can_tick = multiprocessing.Event()
     traffic_manager_is_up = multiprocessing.Event()
-    set_up_traffic_manager_process = multiprocessing.Process(target=set_up_traffic_manager, args=(args, egg_file_path, traffic_manager_is_up))
+    set_up_traffic_manager_process = multiprocessing.Process(target=generate_traffic, args=(egg_file_path, args.carla_ip, args.rpc_port, args.tm_port, 30, 30, traffic_manager_is_up, you_can_tick))
     set_up_traffic_manager_process.start()
 
     while True:
@@ -227,7 +207,7 @@ if __name__ == "__main__":
     data_creation_process = multiprocessing.Process(target=take_data_without_records.take_data_backbone,
                                                     args=(egg_file_path, args.town, args.rpc_port, args.job_id,
                                                           ego_vehicle_found_event, starting_data_loop_event,
-                                                          finished_taking_data_event))
+                                                          finished_taking_data_event, you_can_tick))
     data_creation_process.start()
 
     start_time = time.time()
@@ -284,7 +264,9 @@ if __name__ == "__main__":
     # (6) CLEANING EVERYTHING
     set_up_traffic_manager_process.kill()
     check_carla_process.kill()
-    data_creation_process.kill()
     while not process_to_kill.empty():
         os.kill(process_to_kill.get(), signal.SIGKILL)
+
+    data_creation_process.join()
+
 

@@ -14,7 +14,13 @@ from tqdm import tqdm
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import config
 
-def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_found_event, starting_data_loop_event, finished_taking_data_event):
+STARTING_FRAME = None
+PATHS = {}
+ALREADY_OBTAINED_DATA_FROM_SENSOR_A = [False for _ in range(18)] # rgb_A, depth, semantic, optical_flow, lidar, bev_semantic
+ALREADY_OBTAINED_DATA_FROM_SENSOR_B = [False for _ in range(4)] # rgb_B
+GPS_POSITIONS = []
+
+def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_found_event, starting_data_loop_event, finished_taking_data_event, you_can_tick_event):
     
     sys.path.append(carla_egg_path)
     try:
@@ -22,28 +28,19 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     except:
         pass
     
-    data_last_frame = {}
     take_new_data = {}
-    data_last_frame["lidar"] = np.zeros((config.BEV_IMAGE_H, config.BEV_IMAGE_W), dtype=np.uint8)
     take_new_data["lidar"] = True
-    data_last_frame["bev_semantic"] = np.zeros((config.BEV_IMAGE_H, config.BEV_IMAGE_W), dtype=np.uint8)
     take_new_data["bev_semantic"] = True
-    data_last_frame["bottom_bev_semantic"] = np.zeros((config.BEV_IMAGE_H, config.BEV_IMAGE_W), dtype=np.uint8)
     take_new_data["bottom_bev_semantic"] = True
     UNIFIED_BEV_SEMANTIC = None
     for i in range(4):
         """
         from 0 to 3 -> obvious view
         """
-        data_last_frame[f"rgb_{i}"] = np.zeros((config.IMAGE_H, config.IMAGE_W, 4), dtype=np.uint8)
         take_new_data[f"rgb_{i}"] = True
-        data_last_frame[f"depth_{i}"] = np.zeros((config.IMAGE_H, config.IMAGE_W), dtype=np.uint8)
         take_new_data[f"depth_{i}"] = True
-        data_last_frame[f"semantic_{i}"] = np.zeros((config.IMAGE_H, config.IMAGE_W), dtype=np.uint8)
         take_new_data[f"semantic_{i}"] = True
-        data_last_frame[f"optical_flow_{i}"] = np.zeros((config.IMAGE_H, config.IMAGE_W), dtype=np.uint8)
         take_new_data[f"optical_flow_{i}"] = True
-    #    data_last_frame[f"optical_flow_human_{i}"] = np.zeros((config.IMAGE_H, config.IMAGE_W), dtype=np.uint8)
 
     # Connect the client and set up bp library
     client = carla.Client('localhost', rpc_port)
@@ -76,8 +73,11 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         time.sleep(1)
     ego_vehicle_found_event.set()
 
+    global STARTING_FRAME
+    STARTING_FRAME = world.tick()
+
     # LIDAR callback
-    def lidar_callback(point_cloud):
+    def lidar_callback(data):
         def lidar_to_histogram_features(lidar):
             """
             Convert LiDAR point cloud into 2-bin histogram over a fixed size grid
@@ -96,7 +96,6 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
                 # Comes from the fact that carla is x front, y right, whereas the image is y front, x right
                 # (x height channel, y width channel)
                 return overhead_splat.T
-
             # Remove points above the vehicle
             lidar = lidar[lidar[..., 2] < 100]
             lidar = lidar[lidar[..., 2] > -2.2]
@@ -107,76 +106,83 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             features = features.astype(np.uint8)
             return features
         
-        if take_new_data[f"lidar"]:
-            data = np.copy(np.frombuffer(point_cloud.raw_data, dtype=np.dtype('f4')))
-            data = np.reshape(data, (int(data.shape[0] / 4), 4))
-            data_last_frame[f"lidar"] = lidar_to_histogram_features(data[:, :3])[0]
-            take_new_data[f"lidar"] = False
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+            lidar_data = np.copy(np.frombuffer(data.raw_data, dtype=np.dtype('f4')))
+            lidar_data = np.reshape(lidar_data, (int(lidar_data.shape[0] / 4), 4))
+            lidar_data = lidar_to_histogram_features(lidar_data[:, :3])[0]
+            lidar_data = np.rot90(lidar_data)
+            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
+            cv2.imwrite(os.path.join(PATHS["lidar"], f"{saved_frame}.png"), lidar_data)
+
         
     # CAMERAS callback
-    def rgb_callback(image, number):
-        if take_new_data[f"rgb_{number}"]:
-            data_last_frame[f"rgb_{number}"] = np.reshape(np.copy(image.raw_data), (image.height, image.width, 4))
-            take_new_data[f"rgb_{number}"] = False
+    def rgb_callback(data, number):
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+            rgb = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
+            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
+            cv2.imwrite(os.path.join(PATHS[f"rgb_B_{number}"], f"{saved_frame}.jpg"), rgb)
+        elif (data.frame + 1 - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+            rgb = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
+            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE + 1
+            cv2.imwrite(os.path.join(PATHS[f"rgb_A_{number}"], f"{saved_frame}.jpg"), rgb)
 
     # DEPTH callback
-    def depth_callback(depth, number):
-        if take_new_data[f"depth_{number}"]:
-            take_new_data[f"depth_{number}"] = False
-            depth.convert(carla.ColorConverter.LogarithmicDepth)
-            depth = np.reshape(np.copy(depth.raw_data), (depth.height, depth.width, 4))
-            data_last_frame[f"depth_{number}"] = depth[: , :, 0]
-            
+    def depth_callback(data, number):
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+            data.convert(carla.ColorConverter.LogarithmicDepth)
+            depth = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
+            depth = depth[: , :, 0]
+            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
+            cv2.imwrite(os.path.join(PATHS[f"depth_{number}"], f"{saved_frame}.png"), depth)
 
     # SEMATIC callback
-    def semantic_callback(semantic, number):
-        if take_new_data[f"semantic_{number}"]:
-            take_new_data[f"semantic_{number}"] = False
+    def semantic_callback(data, number):
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             # semantic.convert(carla.ColorConverter.CityScapesPalette)
-            semantic = np.reshape(np.copy(semantic.raw_data), (semantic.height, semantic.width, 4))
-            data_last_frame[f"semantic_{number}"] = semantic[:, :, 2]
+            semantic = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
+            semantic = semantic[:, :, 2]
+            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
+            cv2.imwrite(os.path.join(PATHS[f"semantic_{number}"], f"{saved_frame}.png"), unify_semantic_tags(semantic))
 
     # OPTICAL FLOW callback
-    def optical_flow_callback(optical_flow, number):
-        if take_new_data[f"optical_flow_{number}"]:
-            take_new_data[f"optical_flow_{number}"] = False
-    #        optical_flow_human = optical_flow.get_color_coded_flow() # JUST TEMPORANEALLY
-    #        optical_flow_human = np.reshape(np.copy(optical_flow_human.raw_data), (config.IMAGE_H, config.IMAGE_W, 4))
-    #        optical_flow_human[: , :, 3] = 255
-            array_optical_flow = np.copy(np.frombuffer(optical_flow.raw_data, dtype=np.float32))
-            optical_flow =  np.reshape(array_optical_flow, (optical_flow.height, optical_flow.width, 2))
+    def optical_flow_callback(data, number):
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+            optical_flow = np.copy(np.frombuffer(data.raw_data, dtype=np.float32))
+            optical_flow =  np.reshape(optical_flow, (data.height, data.width, 2))
             optical_flow[:, :, 0] *= config.IMAGE_H * 0.5
             optical_flow[:, :, 1] *= config.IMAGE_W * 0.5
             optical_flow = 64.0 * optical_flow + 2**15 # This means maximum pixel distance of 512 
             valid = np.ones([optical_flow.shape[0], optical_flow.shape[1], 1])
             optical_flow = np.concatenate([optical_flow, valid], axis=-1).astype(np.uint16)
-            # print(f"0 [{np.min(optical_flow[:, :, 0])}; {np.max(optical_flow[:, :, 0])}]")
-            # print(f"1 [{np.min(optical_flow[:, :, 1])}; {np.max(optical_flow[:, :, 1])}]")
-            data_last_frame[f"optical_flow_{number}"] = optical_flow
-    #        data_last_frame[f"optical_flow_human_{number}"] = optical_flow_human
-
+            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
+            cv2.imwrite(os.path.join(PATHS[f"optical_flow_{number}"], f"{saved_frame}.png"), optical_flow)
+            
     # BEV SEMANTIC callback
-    def bev_semantic_callback(bev_semantic):
-        if take_new_data["bev_semantic"]:
-            take_new_data["bev_semantic"] = False
+    def bev_semantic_callback(data):
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             # bev_semantic.convert(carla.ColorConverter.CityScapesPalette)
-            bev_semantic = np.reshape(np.copy(bev_semantic.raw_data), (bev_semantic.height, bev_semantic.width, 4))
-            bev_semantic = bev_semantic[:, :, 2]
-            data_last_frame["bev_semantic"] = cv2.resize(bev_semantic, (config.BEV_IMAGE_H, config.BEV_IMAGE_W), interpolation= cv2.INTER_NEAREST_EXACT)
-
+            top_bev_semantic = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
+            top_bev_semantic = top_bev_semantic[:, :, 2]
+            top_bev_semantic = cv2.resize(top_bev_semantic, (config.BEV_IMAGE_H, config.BEV_IMAGE_W), interpolation= cv2.INTER_NEAREST_EXACT)
+            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
+            cv2.imwrite(os.path.join(PATHS["bev_semantic"], f"top_{saved_frame}.png"), top_bev_semantic)
 
     # BOTTOM BEV SEMANTIC callback
-    def bev_bottom_semantic_callback(bev_semantic):
-        if take_new_data["bottom_bev_semantic"]:
+    def bev_bottom_semantic_callback(data):
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             take_new_data["bottom_bev_semantic"] = False
             # bev_semantic.convert(carla.ColorConverter.CityScapesPalette)
-            bev_semantic = np.reshape(np.copy(bev_semantic.raw_data), (bev_semantic.height, bev_semantic.width, 4))
-            bev_semantic = bev_semantic[:, :, 2]
-            bev_semantic = cv2.resize(bev_semantic, (config.BEV_IMAGE_H, config.BEV_IMAGE_W), interpolation= cv2.INTER_NEAREST_EXACT)
-            data_last_frame["bottom_bev_semantic"] = np.flip(bev_semantic, 1)
-
+            bottom_bev_semantic = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
+            bottom_bev_semantic = bottom_bev_semantic[:, :, 2]
+            bottom_bev_semantic = cv2.resize(bottom_bev_semantic, (config.BEV_IMAGE_H, config.BEV_IMAGE_W), interpolation= cv2.INTER_NEAREST_EXACT)
+            bottom_bev_semantic =  np.flip(bottom_bev_semantic, 1)
+            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
+            cv2.imwrite(os.path.join(PATHS["bev_semantic"], f"bottom_{saved_frame}.png"), bottom_bev_semantic)
+    
+    # GPS callback
     def gps_callback(data):
-        print(data)
+        print(f"gps {data.frame}")
+        GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
 
     # LIDAR
     lidar_bp = bp_lib.find('sensor.lidar.ray_cast') 
@@ -270,7 +276,6 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         sensors[f"semantic_{i}"].listen(lambda semantic, i=i: semantic_callback(semantic, i))
         sensors[f"optical_flow_{i}"].listen(lambda optical_flow, i=i: optical_flow_callback(optical_flow, i))
     sensors["gps"].listen(lambda data: gps_callback(data))
-    # world.on_tick(lambda world_snapshot: bbs_callback(world_snapshot)) # On Tick callback for bounding boxes
 
     # Create Directory Branches
 
@@ -288,18 +293,18 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     semantic_folders_name =     [f"semantic_{i}"        for i in range(4)]
     optical_flow_folders_name = [f"optical_flow_{i}"    for i in range(4)]
 
-    paths = {}
-    paths["lidar"] = os.path.join(config.DATASET_PATH, "bev_lidar")
-    paths["bev_semantic"] = os.path.join(config.DATASET_PATH, "bev_semantic")
+    global PATHS
+    PATHS["lidar"] = os.path.join(config.DATASET_PATH, "bev_lidar")
+    PATHS["bev_semantic"] = os.path.join(config.DATASET_PATH, "bev_semantic")
     for i in range(4):
-        paths[f"rgb_A_{i}"] = os.path.join(config.DATASET_PATH, rgb_A_folders_name[i])
-        paths[f"rgb_B_{i}"] = os.path.join(config.DATASET_PATH, rgb_B_folders_name[i])
-        paths[f"depth_{i}"] = os.path.join(config.DATASET_PATH, depth_folders_name[i])
-        paths[f"semantic_{i}"] = os.path.join(config.DATASET_PATH, semantic_folders_name[i])
-        paths[f"optical_flow_{i}"] = os.path.join(config.DATASET_PATH, optical_flow_folders_name[i])
+        PATHS[f"rgb_A_{i}"] = os.path.join(config.DATASET_PATH, rgb_A_folders_name[i])
+        PATHS[f"rgb_B_{i}"] = os.path.join(config.DATASET_PATH, rgb_B_folders_name[i])
+        PATHS[f"depth_{i}"] = os.path.join(config.DATASET_PATH, depth_folders_name[i])
+        PATHS[f"semantic_{i}"] = os.path.join(config.DATASET_PATH, semantic_folders_name[i])
+        PATHS[f"optical_flow_{i}"] = os.path.join(config.DATASET_PATH, optical_flow_folders_name[i])
 
-    for key_path in paths:
-        os.mkdir(paths[key_path])
+    for key_path in PATHS:
+        os.mkdir(PATHS[key_path])
 
     def cntrl_c(_, __):
         sensors["lidar"].stop()
@@ -319,7 +324,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             sensors[f"optical_flow_{i}"].destroy()
         exit()
 
-    def merge_semantics():
+    def merge_semantics(bev_semantic, bottom_bev_semantic):
         """
         We keep:
         0 -> uknown
@@ -329,38 +334,38 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         4 -> vehicles
         5 -> pedestrian
         """
-        UNIFIED_BEV_SEMANTIC = np.zeros((config.BEV_IMAGE_H, config.BEV_IMAGE_W), dtype=np.uint8)
+        unified_bev_semantic = np.zeros((config.BEV_IMAGE_H, config.BEV_IMAGE_W), dtype=np.uint8)
 
         # road
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 1] = 1
+        unified_bev_semantic[bev_semantic == 1] = 1
         # terrain where the car should not go
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 2] = 2
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 10] = 2
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 25] = 2
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 23] = 2
+        unified_bev_semantic[bev_semantic == 2] = 2
+        unified_bev_semantic[bev_semantic == 10] = 2
+        unified_bev_semantic[bev_semantic == 25] = 2
+        unified_bev_semantic[bev_semantic == 23] = 2
         # line_on_asphalt + written staff on the ground
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 24] = 3
+        unified_bev_semantic[bev_semantic == 24] = 3
         # vehicles
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 13] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 14] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 15] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 16] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 17] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 18] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 19] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 13] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 14] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 15] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 16] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 17] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 18] = 4
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bottom_bev_semantic"] == 19] = 4
+        unified_bev_semantic[bev_semantic == 13] = 4
+        unified_bev_semantic[bev_semantic == 14] = 4
+        unified_bev_semantic[bev_semantic == 15] = 4
+        unified_bev_semantic[bev_semantic == 16] = 4
+        unified_bev_semantic[bev_semantic == 17] = 4
+        unified_bev_semantic[bev_semantic == 18] = 4
+        unified_bev_semantic[bev_semantic == 19] = 4
+        unified_bev_semantic[bottom_bev_semantic == 13] = 4
+        unified_bev_semantic[bottom_bev_semantic == 14] = 4
+        unified_bev_semantic[bottom_bev_semantic == 15] = 4
+        unified_bev_semantic[bottom_bev_semantic == 16] = 4
+        unified_bev_semantic[bottom_bev_semantic == 17] = 4
+        unified_bev_semantic[bottom_bev_semantic == 18] = 4
+        unified_bev_semantic[bottom_bev_semantic == 19] = 4
         # pedestrian
-        UNIFIED_BEV_SEMANTIC[data_last_frame["bev_semantic"] == 12] = 5
+        unified_bev_semantic[bev_semantic == 12] = 5
 
-        return UNIFIED_BEV_SEMANTIC
+        return unified_bev_semantic
 
-    def unify_semantic_tags():
+    def unify_semantic_tags(semantic):
         """
         We keep:
         0 -> uknown
@@ -372,75 +377,63 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         6 -> sign
         7 -> traffic lights
         """
-        for i in range(4):
-            UNIFIED_SEMANTIC = np.zeros((config.IMAGE_H, config.IMAGE_W), dtype=np.uint8)
-            # road
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 1] = 1
-            # terrain where the car should not go
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 2] = 2
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 10] = 2
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 25] = 2
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 23] = 2
-            # line_on_asphalt + written staff on the ground
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 24] = 3
-            # vehicles
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 13] = 4
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 14] = 4
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 15] = 4
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 16] = 4
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 17] = 4
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 18] = 4
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 19] = 4
-            # pedestrian
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 12] = 5
-            # sign
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 8] = 6
-            # traffic lights
-            UNIFIED_SEMANTIC[data_last_frame[f"semantic_{i}"] == 7] = 7
-            data_last_frame[f"semantic_{i}"] = UNIFIED_SEMANTIC
+        unified_semantic = np.zeros((config.IMAGE_H, config.IMAGE_W), dtype=np.uint8)
+        # road
+        unified_semantic[semantic == 1] = 1
+        # terrain where the car should not go
+        unified_semantic[semantic == 2] = 2
+        unified_semantic[semantic == 10] = 2
+        unified_semantic[semantic == 25] = 2
+        unified_semantic[semantic == 23] = 2
+        # line_on_asphalt + written staff on the ground
+        unified_semantic[semantic == 24] = 3
+        # vehicles
+        unified_semantic[semantic == 13] = 4
+        unified_semantic[semantic == 14] = 4
+        unified_semantic[semantic == 15] = 4
+        unified_semantic[semantic == 16] = 4
+        unified_semantic[semantic == 17] = 4
+        unified_semantic[semantic == 18] = 4
+        unified_semantic[semantic == 19] = 4
+        # pedestrian
+        unified_semantic[semantic == 12] = 5
+        # sign
+        unified_semantic[semantic == 8] = 6
+        # traffic lights
+        unified_semantic[semantic == 7] = 7
+        return unified_semantic
 
     signal.signal(signal.SIGINT, cntrl_c)
 
-    carla_frame = 0
-    saved_frame = 0
-    gps_positions = []
-    world.tick()
-    for key_take_new_data in take_new_data:
-                take_new_data[key_take_new_data] = True
-    world.tick()
     print("Starting Data Loop!")
     starting_data_loop_event.set()
+    you_can_tick_event.set()
     with tqdm(total=config.MAX_NUM_OF_SAVED_FRAME*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE) as pbar:
-        pbar.update(1)
         while True:
-            if carla_frame == 0:
-                for key_take_new_data in take_new_data:
-                    if key_take_new_data[:3] == "rgb":
-                        take_new_data[key_take_new_data] = True
-            elif carla_frame == 1:
-                for i in range(4):
-                    cv2.imwrite(os.path.join(paths[f"rgb_A_{i}"], f"{saved_frame}.jpg"), data_last_frame[f"rgb_{i}"])
-                for key_take_new_data in take_new_data:
-                    take_new_data[key_take_new_data] = True
-            elif carla_frame == config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE - 1:
-                carla_frame = -1
-                cv2.imwrite(os.path.join(paths["lidar"], f"{saved_frame}.png"), data_last_frame["lidar"])
-                cv2.imwrite(os.path.join(paths["bev_semantic"], f"{saved_frame}.png"), merge_semantics())
-                unify_semantic_tags()
-                for i in range(4):
-                    cv2.imwrite(os.path.join(paths[f"rgb_B_{i}"], f"{saved_frame}.jpg"), data_last_frame[f"rgb_{i}"])
-                    cv2.imwrite(os.path.join(paths[f"depth_{i}"], f"{saved_frame}.png"), data_last_frame[f"depth_{i}"])
-                    cv2.imwrite(os.path.join(paths[f"semantic_{i}"], f"{saved_frame}.png"), data_last_frame[f"semantic_{i}"])
-                    cv2.imwrite(os.path.join(paths[f"optical_flow_{i}"], f"{saved_frame}.png"), data_last_frame[f"optical_flow_{i}"])
-        #            cv2.imwrite(os.path.join(paths[f"optical_flow_{i}"], f"h_{saved_frame}.png"), data_last_frame[f"optical_flow_human_{i}"])
-                saved_frame += 1
-            carla_frame += 1
-            if saved_frame >= config.MAX_NUM_OF_SAVED_FRAME:
-                break
-            # world.tick()
-            world.wait_for_tick()
+            world_snapshot = world.wait_for_tick()
+            if (world_snapshot.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+                while True:
+                    if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_A) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_A):
+                        break
+            elif (world_snapshot.frame + 1 - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+                while True:
+                    if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_B) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_B):
+                        break
+            you_can_tick_event.set()
             pbar.update(1)
+            if (world_snapshot.frame - STARTING_FRAME) > config.MAX_NUM_OF_SAVED_FRAME*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE:
+                break
+    world.wait_for_tick()
     finished_taking_data_event.set()
-    while True:
-        pass
+    print("Unifing Top and Bottom BEV!")
+    for i in tqdm(range(1, config.MAX_NUM_OF_SAVED_FRAME+1)):
+        top_bev_semantic = cv2.imread(os.path.join(PATHS["bev_semantic"], f"top_{i}.png"))[:, :, 0]
+        bottom_bev_semantic = cv2.imread(os.path.join(PATHS["bev_semantic"], f"bottom_{i}.png"))[:, :, 0]
+        bev_semantic = merge_semantics(top_bev_semantic, bottom_bev_semantic)
+        cv2.imwrite(os.path.join(PATHS["bev_semantic"], f"{i}.png"), bev_semantic)
+        os.remove(os.path.join(PATHS["bev_semantic"], f"top_{i}.png"))
+        os.remove(os.path.join(PATHS["bev_semantic"], f"bottom_{i}.png"))
+    print("Saving GPS locations!")
+    gps_array = np.array(GPS_POSITIONS)
+    np.save(os.path.join(os.path.join(config.DATASET_PATH), "gps.npy"), gps_array)
 
