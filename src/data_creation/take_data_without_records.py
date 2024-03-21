@@ -10,15 +10,21 @@ import numpy as np
 import cv2
 from datetime import datetime
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 import config
+import utils
 
 STARTING_FRAME = None
 PATHS = {}
-ALREADY_OBTAINED_DATA_FROM_SENSOR_A = [False for _ in range(18)] # rgb_A, depth, semantic, optical_flow, lidar, bev_semantic
-ALREADY_OBTAINED_DATA_FROM_SENSOR_B = [False for _ in range(4)] # rgb_B
-GPS_POSITIONS = []
+ALREADY_OBTAINED_DATA_FROM_SENSOR_A = [False for _ in range(4)] # rgb_A 
+ALREADY_OBTAINED_DATA_FROM_SENSOR_B = [False for _ in range(21)] # rgb_B, depth, semantic, optical_flow, lidar, bev_semantic_top, bev_semantic_bottom, frame_gps_position, compass
+FRAME_GPS_POSITIONS = []
+ALL_GPS_POSITIONS = []
+FRAME_COMPASS = []
+
+DISABLE_ALL_SENSORS = False
 
 def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_found_event, starting_data_loop_event, finished_taking_data_event, you_can_tick_event):
     
@@ -27,20 +33,6 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         import carla
     except:
         pass
-    
-    take_new_data = {}
-    take_new_data["lidar"] = True
-    take_new_data["bev_semantic"] = True
-    take_new_data["bottom_bev_semantic"] = True
-    UNIFIED_BEV_SEMANTIC = None
-    for i in range(4):
-        """
-        from 0 to 3 -> obvious view
-        """
-        take_new_data[f"rgb_{i}"] = True
-        take_new_data[f"depth_{i}"] = True
-        take_new_data[f"semantic_{i}"] = True
-        take_new_data[f"optical_flow_{i}"] = True
 
     # Connect the client and set up bp library
     client = carla.Client('localhost', rpc_port)
@@ -48,7 +40,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     world = client.get_world()
     settings = world.get_settings()
     settings.synchronous_mode = True
-    settings.fixed_delta_seconds = 0.05
+    settings.fixed_delta_seconds = 1. / config.CARLA_FPS
     # In this case, the simulator will take 20 steps (1/0.05) to recreate one second of
     # the simulated world.
     settings.substepping = True
@@ -73,9 +65,6 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         time.sleep(1)
     ego_vehicle_found_event.set()
 
-    global STARTING_FRAME
-    STARTING_FRAME = world.tick()
-
     # LIDAR callback
     def lidar_callback(data):
         def lidar_to_histogram_features(lidar):
@@ -97,8 +86,8 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
                 # (x height channel, y width channel)
                 return overhead_splat.T
             # Remove points above the vehicle
-            lidar = lidar[lidar[..., 2] < 100]
-            lidar = lidar[lidar[..., 2] > -2.2]
+            lidar = lidar[lidar[..., 2] < -2.5 + config.MAXIMUM_LIDAR_HEIGHT]
+            lidar = lidar[lidar[..., 2] > -2.5 + config.MINIMUM_LIDAR_HEIGHT]
             features = splat_points(lidar)
             features = np.stack([features], axis=-1)
             features = np.transpose(features, (2, 0, 1))
@@ -106,47 +95,51 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             features = features.astype(np.uint8)
             return features
         
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
             lidar_data = np.copy(np.frombuffer(data.raw_data, dtype=np.dtype('f4')))
             lidar_data = np.reshape(lidar_data, (int(lidar_data.shape[0] / 4), 4))
             lidar_data = lidar_to_histogram_features(lidar_data[:, :3])[0]
             lidar_data = np.rot90(lidar_data)
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS["lidar"], f"{saved_frame}.png"), lidar_data)
-
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[16] = True
         
     # CAMERAS callback
     def rgb_callback(data, number):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
             rgb = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"rgb_B_{number}"], f"{saved_frame}.jpg"), rgb)
-        elif (data.frame + 1 - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[0 + number] = True
+        elif (data.frame + 1 - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
             rgb = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
-            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE + 1
+            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"rgb_A_{number}"], f"{saved_frame}.jpg"), rgb)
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_A[0 + number] = True
 
     # DEPTH callback
     def depth_callback(data, number):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
             data.convert(carla.ColorConverter.LogarithmicDepth)
             depth = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             depth = depth[: , :, 0]
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"depth_{number}"], f"{saved_frame}.png"), depth)
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[4 + number] = True
 
     # SEMATIC callback
     def semantic_callback(data, number):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
             # semantic.convert(carla.ColorConverter.CityScapesPalette)
             semantic = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             semantic = semantic[:, :, 2]
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"semantic_{number}"], f"{saved_frame}.png"), unify_semantic_tags(semantic))
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[8 + number] = True
 
     # OPTICAL FLOW callback
     def optical_flow_callback(data, number):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
             optical_flow = np.copy(np.frombuffer(data.raw_data, dtype=np.float32))
             optical_flow =  np.reshape(optical_flow, (data.height, data.width, 2))
             optical_flow[:, :, 0] *= config.IMAGE_H * 0.5
@@ -156,21 +149,22 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             optical_flow = np.concatenate([optical_flow, valid], axis=-1).astype(np.uint16)
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"optical_flow_{number}"], f"{saved_frame}.png"), optical_flow)
-            
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[12 + number] = True
+
     # BEV SEMANTIC callback
     def bev_semantic_callback(data):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
             # bev_semantic.convert(carla.ColorConverter.CityScapesPalette)
             top_bev_semantic = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             top_bev_semantic = top_bev_semantic[:, :, 2]
             top_bev_semantic = cv2.resize(top_bev_semantic, (config.BEV_IMAGE_H, config.BEV_IMAGE_W), interpolation= cv2.INTER_NEAREST_EXACT)
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS["bev_semantic"], f"top_{saved_frame}.png"), top_bev_semantic)
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[17] = True
 
     # BOTTOM BEV SEMANTIC callback
     def bev_bottom_semantic_callback(data):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
-            take_new_data["bottom_bev_semantic"] = False
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
             # bev_semantic.convert(carla.ColorConverter.CityScapesPalette)
             bottom_bev_semantic = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             bottom_bev_semantic = bottom_bev_semantic[:, :, 2]
@@ -178,11 +172,20 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             bottom_bev_semantic =  np.flip(bottom_bev_semantic, 1)
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS["bev_semantic"], f"bottom_{saved_frame}.png"), bottom_bev_semantic)
-    
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[18] = True
+
     # GPS callback
     def gps_callback(data):
-        print(f"gps {data.frame}")
-        GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
+        ALL_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+            FRAME_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[19] = True
+
+    # IMU callback
+    def imu_callback(data):
+        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+            FRAME_COMPASS.append(data.compass)
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[20] = True
 
     # LIDAR
     lidar_bp = bp_lib.find('sensor.lidar.ray_cast') 
@@ -237,6 +240,9 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     # GPS
     gps_bp = bp_lib.find("sensor.other.gnss")
 
+    # IMU
+    imu_bp = bp_lib.find("sensor.other.imu")
+
     transformations = []
 
     # Obvious CAMERAS
@@ -265,6 +271,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         sensors[f"semantic_{i}"] = world.spawn_actor(semantic_bp, transformations[i], attach_to=hero)
         sensors[f"optical_flow_{i}"] = world.spawn_actor(optical_flow_bp, transformations[i], attach_to=hero)
     sensors["gps"] = world.spawn_actor(gps_bp, lidar_init_trans, attach_to=hero)
+    sensors["imu"] = world.spawn_actor(imu_bp, lidar_init_trans, attach_to=hero)
 
     # Connect Sensor and Callbacks
     sensors["lidar"].listen(lambda data: lidar_callback(data))
@@ -276,6 +283,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         sensors[f"semantic_{i}"].listen(lambda semantic, i=i: semantic_callback(semantic, i))
         sensors[f"optical_flow_{i}"].listen(lambda optical_flow, i=i: optical_flow_callback(optical_flow, i))
     sensors["gps"].listen(lambda data: gps_callback(data))
+    sensors["imu"].listen(lambda data: imu_callback(data))
 
     # Create Directory Branches
 
@@ -405,35 +413,145 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     signal.signal(signal.SIGINT, cntrl_c)
 
-    print("Starting Data Loop!")
     starting_data_loop_event.set()
     you_can_tick_event.set()
-    with tqdm(total=config.MAX_NUM_OF_SAVED_FRAME*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE) as pbar:
-        while True:
-            world_snapshot = world.wait_for_tick()
-            if (world_snapshot.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
-                while True:
-                    if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_A) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_A):
-                        break
-            elif (world_snapshot.frame + 1 - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
-                while True:
-                    if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_B) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_B):
-                        break
-            you_can_tick_event.set()
-            pbar.update(1)
-            if (world_snapshot.frame - STARTING_FRAME) > config.MAX_NUM_OF_SAVED_FRAME*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE:
-                break
+    global ALREADY_OBTAINED_DATA_FROM_SENSOR_A
+    global ALREADY_OBTAINED_DATA_FROM_SENSOR_B
+    global STARTING_FRAME
+    for _ in tqdm(range(config.MAX_NUM_OF_SAVED_FRAME*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE)):
+        world_snapshot = world.wait_for_tick()
+        if STARTING_FRAME is None:
+            STARTING_FRAME = world_snapshot.frame
+        if (world_snapshot.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+            while True:
+                if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_B) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_B):
+                    break
+            # print("Obtained all the sensors data! B")
+        elif (world_snapshot.frame + 1 - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+            while True:
+                if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_A) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_A):
+                    break
+            # print("Obtained all the sensors data! A")
+        you_can_tick_event.set()
+        ALREADY_OBTAINED_DATA_FROM_SENSOR_A = [False for _ in range(len(ALREADY_OBTAINED_DATA_FROM_SENSOR_A))]
+        ALREADY_OBTAINED_DATA_FROM_SENSOR_B = [False for _ in range(len(ALREADY_OBTAINED_DATA_FROM_SENSOR_B))]
+    global DISABLE_ALL_SENSORS
+    DISABLE_ALL_SENSORS = True
+    print(utils.color_info_string("I get the last gps for creating the last frame waypoints ground truth!"))
+    for _ in tqdm(range(config.FRAME_TO_KEEP_GOING_AFTER_THE_END)):
+        world_snapshot = world.wait_for_tick()
+        time.sleep(0.1)
+        you_can_tick_event.set()
     world.wait_for_tick()
+    time.sleep(0.5)
     finished_taking_data_event.set()
-    print("Unifing Top and Bottom BEV!")
-    for i in tqdm(range(1, config.MAX_NUM_OF_SAVED_FRAME+1)):
+    # BEV SEMANTIC
+    print(utils.color_info_string("Unifing Top and Bottom BEV!"))
+    for i in tqdm(range(0, config.MAX_NUM_OF_SAVED_FRAME)):
         top_bev_semantic = cv2.imread(os.path.join(PATHS["bev_semantic"], f"top_{i}.png"))[:, :, 0]
         bottom_bev_semantic = cv2.imread(os.path.join(PATHS["bev_semantic"], f"bottom_{i}.png"))[:, :, 0]
         bev_semantic = merge_semantics(top_bev_semantic, bottom_bev_semantic)
         cv2.imwrite(os.path.join(PATHS["bev_semantic"], f"{i}.png"), bev_semantic)
         os.remove(os.path.join(PATHS["bev_semantic"], f"top_{i}.png"))
         os.remove(os.path.join(PATHS["bev_semantic"], f"bottom_{i}.png"))
-    print("Saving GPS locations!")
-    gps_array = np.array(GPS_POSITIONS)
-    np.save(os.path.join(os.path.join(config.DATASET_PATH), "gps.npy"), gps_array)
+    # GPS LOCATION
+    print(utils.color_info_string("Saving GPS locations!"))
+    all_gps_positions_array = np.array(ALL_GPS_POSITIONS)
+    frame_gps_positions_array = np.array(FRAME_GPS_POSITIONS)
+    all_carla_positions_array = utils.convert_gps_to_carla(all_gps_positions_array)
+    frame_carla_positions_array = utils.convert_gps_to_carla(frame_gps_positions_array)
+    np.save(os.path.join(os.path.join(config.DATASET_PATH), "all_gps_positions.npy"), all_gps_positions_array)
+    np.save(os.path.join(os.path.join(config.DATASET_PATH), "frame_gps_positions.npy"), frame_gps_positions_array)
+    # COMPASS
+    print(utils.color_info_string("Saving Compass data!"))
+    frame_compass_array = np.array(FRAME_COMPASS)
+    np.save(os.path.join(os.path.join(config.DATASET_PATH), "frame_compass.npy"), frame_compass_array)
+    # NEXT 10 WAYPOINTS of 1 M distance
+    print(utils.color_info_string("Saving Waypoints!"))
+    frame_waypoints = np.zeros((len(frame_carla_positions_array), config.NUM_OF_WAYPOINTS, 3))
+    frame_waypoints_not_rotated = np.zeros((len(frame_carla_positions_array), config.NUM_OF_WAYPOINTS, 3))
+    print(f"len(frame_carla_positions_array) = {len(frame_carla_positions_array)}")
+    print(f"len(all_carla_positions_array) = {len(all_carla_positions_array)}")
+    for frame_id in range(len(frame_carla_positions_array)):
+        all_id = frame_id * config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
+        print(f"{frame_carla_positions_array[frame_id]} =? {all_carla_positions_array[all_id]}")
+        distance = 0
+        old_distance = 0
+        for i in range(1, config.NUM_OF_WAYPOINTS+1):
+            while True:
+                all_id += 1
+                old_distance = distance
+                distance += math.sqrt((all_carla_positions_array[all_id, 0] - all_carla_positions_array[all_id-1, 0])**2
+                                       + (all_carla_positions_array[all_id, 1] - all_carla_positions_array[all_id-1, 1])**2)
+                print(distance)
+                if distance > i*config.DISTANCE_BETWEEN_WAYPOINTS:
+                    big_delta_distance = distance - old_distance
+                    small_delta_distance = i*config.DISTANCE_BETWEEN_WAYPOINTS - old_distance
+                    percentage = small_delta_distance / big_delta_distance
+                    print(f"big = {big_delta_distance}, small = {small_delta_distance}, percentage = {percentage}")
+                    point_x = all_carla_positions_array[all_id-1, 0] + percentage * (all_carla_positions_array[all_id, 0] - all_carla_positions_array[all_id-1, 0])
+                    point_y = all_carla_positions_array[all_id-1, 1] + percentage * (all_carla_positions_array[all_id, 1] - all_carla_positions_array[all_id-1, 1])
+                    point_z = all_carla_positions_array[all_id-1, 2] + percentage * (all_carla_positions_array[all_id, 2] - all_carla_positions_array[all_id-1, 2])
+                    carla_coordinate_waypoint = np.array([point_x, point_y, point_z])
+                    # carla_coordinate_waypoint = all_carla_positions_array[all_id]
+                    vehicle_origin_carla_coordinate_waypoint = carla_coordinate_waypoint - frame_carla_positions_array[frame_id]
+                    theta = -frame_compass_array[frame_id] + math.pi
+                    rotation_matrix = np.array([[np.cos(theta),     -np.sin(theta),     0],
+                                                [np.sin(theta),     np.cos(theta),      0],
+                                                [0,                 0,                  1]])
+                    vehicle_waypoint = rotation_matrix@vehicle_origin_carla_coordinate_waypoint
+                    # TO UNDERSTAND
+                    distance_1 = math.sqrt((carla_coordinate_waypoint[0] - frame_carla_positions_array[frame_id, 0])**2 + (carla_coordinate_waypoint[1] - frame_carla_positions_array[frame_id, 1])**2)
+                    distance_2 = math.sqrt((vehicle_origin_carla_coordinate_waypoint[0])**2 + (vehicle_origin_carla_coordinate_waypoint[1])**2)
+                    distance_3 = math.sqrt((vehicle_waypoint[0])**2 + (vehicle_waypoint[1])**2)
+                    print(f"CORD: [{i}] {carla_coordinate_waypoint} -> {vehicle_origin_carla_coordinate_waypoint} -> {vehicle_waypoint}")
+                    print(f"DIST: [{i}] {distance_1} -> {distance_2} -> {distance_3}")
+                    frame_waypoints[frame_id, i-1] = vehicle_waypoint
+                    frame_waypoints_not_rotated[frame_id, i-1] = vehicle_origin_carla_coordinate_waypoint
+                    break
+    np.save(os.path.join(os.path.join(config.DATASET_PATH), "frame_waypoints.npy"), frame_waypoints)
+    # SPEEDS
+    print(utils.color_info_string("Saving Speeds!"))
+    previous_speeds = [] # the speed given as input to the model
+    next_speeds = [] # the ground trouth speed that the model have to predict
+    def get_speed(index):
+        curr_x = all_carla_positions_array[index, 0]
+        curr_y = all_carla_positions_array[index, 1]
+        next_x = all_carla_positions_array[1 + index, 0]
+        next_y = all_carla_positions_array[1 + index, 1]
+        ellapsed_distance = math.sqrt((curr_x - next_x)**2 + (curr_y - next_y)**2)
+        ellapsed_time = 1. / config.CARLA_FPS
+        speed = ellapsed_distance / ellapsed_time
+        return speed
+    # we calculate the first frame assuming the start speed is 0
+    previous_speeds.append(0)
+    speeds = []
+    for i in range(0, config.HOW_MANY_CARLA_FRAME_FOR_CALCULATING_SPEEDS+1, +1):
+        speed = get_speed(i)
+        speeds.append(speed)
+    starting_next_speed = sum(speeds) / len(speeds)
+    next_speeds.append(starting_next_speed)
+    # we calculate the speed for the following frames
+    for frame_index in range(1, len(frame_gps_positions_array)):
+        speeds = []
+        for i in range(-config.HOW_MANY_CARLA_FRAME_FOR_CALCULATING_SPEEDS-1, 0):
+            speed = get_speed(frame_index*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE + i)
+            speeds.append(speed)
+        mean_speed = sum(speeds) / len(speeds)
+        print(f"[PREV_{frame_index}] speed = {mean_speed:.4f} m/s -> {mean_speed*3.6:.4f} km/h")
+        previous_speeds.append(mean_speed)
+        speeds = []
+        for i in range(0, config.HOW_MANY_CARLA_FRAME_FOR_CALCULATING_SPEEDS+1, +1):
+            speed = get_speed(frame_index*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE + i)
+            speeds.append(speed)
+        mean_speed = sum(speeds) / len(speeds)
+        print(f"[NEXT_{frame_index}] speed = {mean_speed:.4f} m/s -> {mean_speed*3.6:.4f} km/h")
+        next_speeds.append(mean_speed)
+    previous_speeds_array = np.array(previous_speeds)
+    next_speeds_array = np.array(next_speeds)
+    # we save the speed data
+    np.save(os.path.join(os.path.join(config.DATASET_PATH), "previous_speeds.npy"), previous_speeds_array)
+    np.save(os.path.join(os.path.join(config.DATASET_PATH), "next_speeds.npy"), next_speeds_array)
+    print(utils.color_info_string("Saving Waypoints!"))
+
 

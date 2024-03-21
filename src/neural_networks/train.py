@@ -86,7 +86,7 @@ def main(rank: int, world_size: int):
                 scaler,
                 rank,
                 log_dir)
-    trainer.train_for_epochs(100)
+    trainer.train_for_epochs(2)
     my_dataset.close()
 
 if __name__ == "__main__":

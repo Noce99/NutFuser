@@ -71,6 +71,7 @@ class Trainer:
 
         self.optimizer.zero_grad(set_to_none=True)
         torch.cuda.empty_cache()
+        print(self.tensor_board_index)
 
     def train_for_epochs(self, epochs):
         self.trainng_start_time = time.time()
@@ -78,11 +79,12 @@ class Trainer:
             if self.rank == 0:
                 print(f"EPOCH {epoch}")
             self.epoch = epoch
+            self.train()
+            torch.cuda.empty_cache()
             if self.rank == 0:
                 self.qualitative_validation()
                 torch.cuda.empty_cache()
-            self.train()
-            torch.cuda.empty_cache()
+            
 
             self.scheduler.step()
             if self.rank == 0:
@@ -137,7 +139,7 @@ class Trainer:
         
             for key, value in detailed_loss.items():
                 self.writer.add_scalar(prefix + key, value / num_batches, self.tensor_board_index)
-                self.tensor_board_index += 1
+            self.tensor_board_index += 1
 
     @torch.inference_mode()
     def qualitative_validation(self):

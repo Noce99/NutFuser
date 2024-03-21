@@ -171,7 +171,7 @@ class backbone_dataset(Dataset):
         # Let's fill them with data
         index = 0
         for data_folder in self.data_folders:
-            for ii in range(data_folder.elements):
+            for ii in range(1, data_folder.elements+1):
                 self.data_path[index] = data_folder.path
                 self.data_id[index] = ii
                 if index < self.last_frame_in_cache:

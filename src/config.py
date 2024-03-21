@@ -3,10 +3,11 @@ import os
 import time
 
 # GENERAL
-DATASET_PATH = "/home/enrico/Downloads/nut_dataset_old" # "/leonardo_work/IscrC_SSNeRF/nut_dataset"
-VALIDATION_DATASET_PATH = "/home/enrico/Downloads/nut_dataset_old/nut_dataset_old_val"
+DATASET_PATH = "/home/enrico/Downloads/nut_dataset_test" # "/leonardo_work/IscrC_SSNeRF/nut_dataset"
+VALIDATION_DATASET_PATH = "/home/enrico/Downloads/nut_dataset_old/nut_dataset_test"
 
 # TAKE DATA
+CARLA_FPS = 20
 IMAGE_W = 1024
 IMAGE_H = 256
 BEV_IMAGE_W = 256
@@ -17,8 +18,14 @@ BEV_SQUARE_SIDE_IN_M = 40
 MAXIMUM_DISTANCE_FROM_VEHICLE_IN_BEV = BEV_SQUARE_SIDE_IN_M/math.sqrt(2)
 BEV_FOV_IN_DEGREES = (2 * math.atan(BEV_SQUARE_SIDE_IN_M / (2 * BEV_ALTITUDE)))/math.pi * 180
 BEV_BOTTOM_FOV_IN_DEGREES = (2 * math.atan(BEV_SQUARE_SIDE_IN_M / (2 * BEV_BOTTOM_ALTITUDE)))/math.pi * 180
-AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE = 30 # minimum is 3
-MAX_NUM_OF_SAVED_FRAME = 100
+AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE = 5 # minimum is 3
+MAX_NUM_OF_SAVED_FRAME = 10
+NUM_OF_WAYPOINTS = 10
+DISTANCE_BETWEEN_WAYPOINTS = 1 # m
+MINIMUM_LIDAR_HEIGHT = 0.3 # m
+MAXIMUM_LIDAR_HEIGHT = 3 # m
+FRAME_TO_KEEP_GOING_AFTER_THE_END = AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE*10 # we want to be sure to explore enaught space fro the last waypoint ground truth
+HOW_MANY_CARLA_FRAME_FOR_CALCULATING_SPEEDS = 3
 TOWN_DICT = {1:  "Town01_Opt", 2:  "Town02_Opt", 3:  "Town03_Opt", 4:  "Town04_Opt",
              5:  "Town05_Opt", 6:  "Town06_Opt", 7:  "Town07_Opt", 10: "Town10HD_Opt",
              12: "Town12",     13: "Town13",     15: "Town15"}

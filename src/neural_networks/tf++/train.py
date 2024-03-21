@@ -615,6 +615,7 @@ def main():
                    scheduler=scheduler,
                    scaler=scaler)
 
+  print(f"Training starting from epoch {trainer.cur_epoch} and finishing at epoch {args.epochs}!")
   for epoch in range(trainer.cur_epoch, args.epochs):
     # Update the seed depending on the epoch so that the distributed
     # sampler will use different shuffles across different epochs
@@ -685,6 +686,7 @@ class Engine(object):
     self.iters_per_epoch = len(self.dataloader_train)
     self.scaler = scaler
     self.tensor_board_i = 0
+    self.tensor_board_val_i = 0
     self.nut_validation_i = 0
 
     if rank == 0:
@@ -906,11 +908,21 @@ class Engine(object):
     # Collecting the losses from all GPUs has led to issues.
     # I simply log the loss from GPU 0 for now they should be similar.
     if self.rank == 0:
-      self.writer.add_scalar(prefix + 'loss_total', loss_epoch / num_batches, self.tensor_board_i)
+      
+      if prefix == '':
+        index = self.tensor_board_i
+      else:
+        index = self.tensor_board_val_i
+
+      self.writer.add_scalar(prefix + 'loss_total', loss_epoch / num_batches, index)
 
       for key, value in detailed_losses_epoch.items():
-        self.writer.add_scalar(prefix + key, value / num_batches, self.tensor_board_i)
-      self.tensor_board_i += 1
+        self.writer.add_scalar(prefix + key, value / num_batches, index)
+      
+      if prefix == '':
+        self.tensor_board_i += 1
+      else:
+        self.tensor_board_val_i += 1
 
   def save(self):
 
