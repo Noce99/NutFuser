@@ -525,11 +525,13 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         return speed
     # we calculate the first frame assuming the start speed is 0
     previous_speeds.append(0)
+    print(f"[PREV_{0}] speed = {0} m/s -> {0} km/h")
     speeds = []
     for i in range(0, config.HOW_MANY_CARLA_FRAME_FOR_CALCULATING_SPEEDS+1, +1):
         speed = get_speed(i)
         speeds.append(speed)
     starting_next_speed = sum(speeds) / len(speeds)
+    print(f"[NEXT_{0}] speed = {starting_next_speed:.4f} m/s -> {starting_next_speed*3.6:.4f} km/h")
     next_speeds.append(starting_next_speed)
     # we calculate the speed for the following frames
     for frame_index in range(1, len(frame_gps_positions_array)):
