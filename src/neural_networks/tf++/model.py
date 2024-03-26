@@ -133,6 +133,16 @@ class LidarCenterNet(nn.Module):
           inter_channel_2=self.config.deconv_channel_num_2,
           scale_factor_0=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_0,
           scale_factor_1=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_1)
+    
+    if self.config.use_flow:
+      self.flow_decoder = t_u.PerspectiveDecoder(
+            in_channels=self.backbone.num_image_features,
+            out_channels=2,
+            inter_channel_0=self.config.deconv_channel_num_0,
+            inter_channel_1=self.config.deconv_channel_num_1,
+            inter_channel_2=self.config.deconv_channel_num_2,
+            scale_factor_0=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_0,
+            scale_factor_1=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_1)
 
     if self.config.use_controller_input_prediction:# <------------ True
       if self.config.transformer_decoder_join: # <------------------------ True
@@ -426,6 +436,10 @@ class LidarCenterNet(nn.Module):
       pred_depth = self.depth_decoder(image_feature_grid) # [1, 1, 256, 1024]
       pred_depth = torch.sigmoid(pred_depth).squeeze(1) # [1, 256, 1024]
 
+    pred_flow = None
+    if self.config.use_flow:
+      pred_flow = self.flow_decoder(image_feature_grid)
+
     pred_bev_semantic = None
     if self.config.use_bev_semantic:
       pred_bev_semantic = self.bev_semantic_decoder(bev_feature_grid)
@@ -565,13 +579,13 @@ class LidarCenterNet(nn.Module):
     # ----
 
     return pred_wp, pred_target_speed, pred_checkpoint, pred_semantic, pred_bev_semantic, pred_depth, \
-      pred_bounding_box, attention_weights, pred_wp_1, selected_path
+      pred_bounding_box, attention_weights, pred_wp_1, selected_path, pred_flow
 
 # FORWARD FINISH THERE!!!!!!!!!!!!!!!!!!!!
 
-  def compute_loss(self, pred_wp, pred_target_speed, pred_checkpoint, pred_semantic, pred_bev_semantic, pred_depth,
+  def compute_loss(self, pred_wp, pred_target_speed, pred_checkpoint, pred_semantic, pred_bev_semantic, pred_depth, pred_flow,
                    pred_bounding_box, pred_wp_1, selected_path, waypoint_label, target_speed_label, checkpoint_label,
-                   semantic_label, bev_semantic_label, depth_label, center_heatmap_label, wh_label, yaw_class_label,
+                   semantic_label, bev_semantic_label, depth_label, flow_label, center_heatmap_label, wh_label, yaw_class_label,
                    yaw_res_label, offset_label, velocity_label, brake_target_label, pixel_weight_label,
                    avg_factor_label):
     loss = {}
@@ -609,9 +623,14 @@ class LidarCenterNet(nn.Module):
       loss.update({'loss_bev_semantic': loss_bev_semantic})
 
     if self.config.use_depth:
-
       loss_depth = F.l1_loss(pred_depth, depth_label)
       loss.update({'loss_depth': loss_depth})
+    
+    if self.config.use_flow:
+      loss_flow = nn.MSELoss(reduction="sum")(pred_flow, flow_label) # maybe reduction should be 
+      # print(f"pred_flow : [{torch.min(pred_flow)}; {torch.max(pred_flow)}]")
+      # print(f"flow_label : [{torch.min(flow_label)}; {torch.max(flow_label)}]")
+      loss.update({'loss_flow': loss_flow})
 
     if self.config.detect_boxes:
       loss_bbox = self.head.loss(pred_bounding_box[0], pred_bounding_box[1], pred_bounding_box[2], pred_bounding_box[3],

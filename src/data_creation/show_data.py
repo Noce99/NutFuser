@@ -64,7 +64,7 @@ def print_section(screen, number, dataset_path):
                 my_array = np.rot90(my_array)
                 img = pygame.surfarray.make_surface(my_array)
             elif number == 4:
-                my_array = optical_flow_to_human_slow(img_path)
+                my_array = utils.optical_flow_to_human_with_path(img_path)
                 my_array = np.rot90(my_array)
                 my_array = np.flip(my_array, 0)
                 img = pygame.surfarray.make_surface(my_array)
@@ -222,100 +222,6 @@ def check_dataset_folder(dataset_path):
     if MAX_FRAME is None:
         raise Exception(utils.color_error_string(f"WTF?! MAX_FRAME is None?")) 
     MAX_FRAME = max_index
-
-def optical_flow_to_human_fast(optical_flow_path):
-    flow = cv2.imread(optical_flow_path, cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
-    flow = flow.astype(np.float32)
-    flow = flow[:, :, :2]
-    flow = (flow - 2**15) / 64.0
-    H = flow.shape[0]
-    W = flow.shape[1]
-    flow[:, :, 0] /= H * 0.5
-    flow[:, :, 1] /= W * 0.5
-
-    output = np.zeros((H, W, 3), dtype=np.uint8)
-    output[..., 1] = 255
-    mag, ang = cv2.cartToPolar(flow[..., 0], flow[..., 1])
-    output[..., 0] = ang*180/np.pi/2
-    output[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
-    bgr = cv2.cvtColor(output, cv2.COLOR_HSV2BGR)
-    return bgr
-
-def optical_flow_to_human_slow(optical_flow_path):
-    flow = cv2.imread(optical_flow_path, cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
-    flow = flow.astype(np.float32)
-    flow = flow[:, :, :2]
-    flow = (flow - 2**15) / 64.0
-    H = flow.shape[0]
-    W = flow.shape[1]
-    flow[:, :, 0] /= H * 0.5
-    flow[:, :, 1] /= W * 0.5
-    output = np.zeros((H, W, 3), dtype=np.uint8)
-    rad2ang = 180./math.pi
-    for i in range(H):
-        for j in range(W):
-            vx = flow[i, j, 0] 
-            vy = flow[i, j, 1]
-            angle = 180. + math.atan2(vy, vx)*rad2ang
-            if angle < 0:
-                angle = 360. + angle
-                pass
-            angle = math.fmod(angle, 360.)
-            norm = math.sqrt(vx*vx + vy*vy)
-            shift = 0.999
-            a = 1/math.log(0.1 + shift)
-            raw_intensity = a*math.log(norm + shift)
-            if raw_intensity < 0.:
-                intensity = 0.
-            elif raw_intensity > 1.:
-                intensity = 1.
-            else:
-                intensity = raw_intensity
-            S = 1.
-            V = intensity
-            H_60 = angle*1./60.
-            C = V * S
-            X = C*(1. - abs(math.fmod(H_60, 2.) - 1.))
-            m = V - C
-            r = 0.
-            g = 0.
-            b = 0.
-            angle_case = int(H_60)
-            if angle_case == 0:
-                r = C
-                g = X
-                b = 0
-            elif angle_case == 1:
-                r = X
-                g = C
-                b = 0
-            elif angle_case == 2:
-                r = 0
-                g = C
-                b = X
-            elif angle_case == 3:
-                r = 0
-                g = X
-                b = C
-            elif angle_case == 4:
-                r = X
-                g = 0
-                b = C
-            elif angle_case == 5:
-                r = C
-                g = 0
-                b = X
-            else:
-                r = 1
-                g = 1
-                b = 1
-            R = int((r+m)*255)
-            G = int((g+m)*255)
-            B = int((b+m)*255)
-            output[i, j, 0] = R
-            output[i, j, 1] = G
-            output[i, j, 2] = B
-    return output
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description=__doc__)

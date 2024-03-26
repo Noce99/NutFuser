@@ -27,6 +27,16 @@ class TransfuserBackbone(nn.Module):
     
     self.image_encoder = timm.create_model(config.image_architecture, pretrained=True, features_only=True) # config.image_architecture = regnety_032
 
+    # FIRST conv2d in --> self.image_encoder._modules['stem']._modules['conv'] {Conv2d(3, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)}
+    # the weight of the original one have shape of -> [32, 3, 3, 3]
+    # I want a first conv layer : {Conv2d(6, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)}
+    # So the weight of the new layer need to have a shape of -> [32, 6, 3, 3]
+    my_new_first_conv2d = torch.nn.modules.conv.Conv2d(in_channels=6, out_channels=32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+    pretrained_weights = self.image_encoder._modules['stem']._modules['conv'].weight.data.detach().clone()
+    self.image_encoder._modules['stem']._modules['conv'] = my_new_first_conv2d
+    pretrained_weights = torch.concatenate([pretrained_weights, pretrained_weights], dim=1).contiguous()
+    self.image_encoder._modules['stem']._modules['conv'].weight.data = pretrained_weights
+
     self.lidar_video = False
     if config.lidar_architecture in ('video_resnet18', 'video_swin_tiny'): # NOT ENTERING
       self.lidar_video = True

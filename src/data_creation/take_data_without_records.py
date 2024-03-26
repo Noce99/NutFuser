@@ -95,7 +95,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             features = features.astype(np.uint8)
             return features
         
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             lidar_data = np.copy(np.frombuffer(data.raw_data, dtype=np.dtype('f4')))
             lidar_data = np.reshape(lidar_data, (int(lidar_data.shape[0] / 4), 4))
             lidar_data = lidar_to_histogram_features(lidar_data[:, :3])[0]
@@ -106,12 +106,12 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         
     # CAMERAS callback
     def rgb_callback(data, number):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             rgb = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"rgb_B_{number}"], f"{saved_frame}.jpg"), rgb)
             ALREADY_OBTAINED_DATA_FROM_SENSOR_B[0 + number] = True
-        elif (data.frame + 1 - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+        elif not DISABLE_ALL_SENSORS and (data.frame + 1 - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             rgb = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"rgb_A_{number}"], f"{saved_frame}.jpg"), rgb)
@@ -119,7 +119,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     # DEPTH callback
     def depth_callback(data, number):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             data.convert(carla.ColorConverter.LogarithmicDepth)
             depth = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             depth = depth[: , :, 0]
@@ -129,7 +129,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     # SEMATIC callback
     def semantic_callback(data, number):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             # semantic.convert(carla.ColorConverter.CityScapesPalette)
             semantic = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             semantic = semantic[:, :, 2]
@@ -139,12 +139,12 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     # OPTICAL FLOW callback
     def optical_flow_callback(data, number):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             optical_flow = np.copy(np.frombuffer(data.raw_data, dtype=np.float32))
             optical_flow =  np.reshape(optical_flow, (data.height, data.width, 2))
             optical_flow[:, :, 0] *= config.IMAGE_H * 0.5
             optical_flow[:, :, 1] *= config.IMAGE_W * 0.5
-            optical_flow = 64.0 * optical_flow + 2**15 # This means maximum pixel distance of 512 
+            optical_flow = 64.0 * optical_flow + 2**15 # This means maximum pixel distance of 512 (2**15/64=512)
             valid = np.ones([optical_flow.shape[0], optical_flow.shape[1], 1])
             optical_flow = np.concatenate([optical_flow, valid], axis=-1).astype(np.uint16)
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
@@ -153,7 +153,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     # BEV SEMANTIC callback
     def bev_semantic_callback(data):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             # bev_semantic.convert(carla.ColorConverter.CityScapesPalette)
             top_bev_semantic = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             top_bev_semantic = top_bev_semantic[:, :, 2]
@@ -164,7 +164,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     # BOTTOM BEV SEMANTIC callback
     def bev_bottom_semantic_callback(data):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             # bev_semantic.convert(carla.ColorConverter.CityScapesPalette)
             bottom_bev_semantic = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             bottom_bev_semantic = bottom_bev_semantic[:, :, 2]
@@ -177,13 +177,13 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     # GPS callback
     def gps_callback(data):
         ALL_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             FRAME_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
             ALREADY_OBTAINED_DATA_FROM_SENSOR_B[19] = True
 
     # IMU callback
     def imu_callback(data):
-        if (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0 and not DISABLE_ALL_SENSORS:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             FRAME_COMPASS.append(data.compass)
             ALREADY_OBTAINED_DATA_FROM_SENSOR_B[20] = True
 
@@ -413,6 +413,17 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     signal.signal(signal.SIGINT, cntrl_c)
 
+    # Let's Run Some Carla's Step to let everithing to be setted up
+    global DISABLE_ALL_SENSORS
+    print("Started to warm up!")
+    DISABLE_ALL_SENSORS = True
+    for _ in tqdm(range(20)):
+        you_can_tick_event.set()
+        world_snapshot = world.wait_for_tick()
+        time.sleep(0.3)
+    DISABLE_ALL_SENSORS = False
+    print("Finished to warm up!")
+
     starting_data_loop_event.set()
     you_can_tick_event.set()
     global ALREADY_OBTAINED_DATA_FROM_SENSOR_A
@@ -435,7 +446,6 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         you_can_tick_event.set()
         ALREADY_OBTAINED_DATA_FROM_SENSOR_A = [False for _ in range(len(ALREADY_OBTAINED_DATA_FROM_SENSOR_A))]
         ALREADY_OBTAINED_DATA_FROM_SENSOR_B = [False for _ in range(len(ALREADY_OBTAINED_DATA_FROM_SENSOR_B))]
-    global DISABLE_ALL_SENSORS
     DISABLE_ALL_SENSORS = True
     print(utils.color_info_string("I get the last gps for creating the last frame waypoints ground truth!"))
     for _ in tqdm(range(config.FRAME_TO_KEEP_GOING_AFTER_THE_END)):
@@ -470,11 +480,9 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     print(utils.color_info_string("Saving Waypoints!"))
     frame_waypoints = np.zeros((len(frame_carla_positions_array), config.NUM_OF_WAYPOINTS, 3))
     frame_waypoints_not_rotated = np.zeros((len(frame_carla_positions_array), config.NUM_OF_WAYPOINTS, 3))
-    print(f"len(frame_carla_positions_array) = {len(frame_carla_positions_array)}")
-    print(f"len(all_carla_positions_array) = {len(all_carla_positions_array)}")
     for frame_id in range(len(frame_carla_positions_array)):
         all_id = frame_id * config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
-        print(f"{frame_carla_positions_array[frame_id]} =? {all_carla_positions_array[all_id]}")
+        # print(f"{frame_carla_positions_array[frame_id]} =? {all_carla_positions_array[all_id]}")
         distance = 0
         old_distance = 0
         for i in range(1, config.NUM_OF_WAYPOINTS+1):
@@ -483,12 +491,12 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
                 old_distance = distance
                 distance += math.sqrt((all_carla_positions_array[all_id, 0] - all_carla_positions_array[all_id-1, 0])**2
                                        + (all_carla_positions_array[all_id, 1] - all_carla_positions_array[all_id-1, 1])**2)
-                print(distance)
+                # print(distance)
                 if distance > i*config.DISTANCE_BETWEEN_WAYPOINTS:
                     big_delta_distance = distance - old_distance
                     small_delta_distance = i*config.DISTANCE_BETWEEN_WAYPOINTS - old_distance
                     percentage = small_delta_distance / big_delta_distance
-                    print(f"big = {big_delta_distance}, small = {small_delta_distance}, percentage = {percentage}")
+                    # print(f"big = {big_delta_distance}, small = {small_delta_distance}, percentage = {percentage}")
                     point_x = all_carla_positions_array[all_id-1, 0] + percentage * (all_carla_positions_array[all_id, 0] - all_carla_positions_array[all_id-1, 0])
                     point_y = all_carla_positions_array[all_id-1, 1] + percentage * (all_carla_positions_array[all_id, 1] - all_carla_positions_array[all_id-1, 1])
                     point_z = all_carla_positions_array[all_id-1, 2] + percentage * (all_carla_positions_array[all_id, 2] - all_carla_positions_array[all_id-1, 2])
@@ -504,8 +512,8 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
                     distance_1 = math.sqrt((carla_coordinate_waypoint[0] - frame_carla_positions_array[frame_id, 0])**2 + (carla_coordinate_waypoint[1] - frame_carla_positions_array[frame_id, 1])**2)
                     distance_2 = math.sqrt((vehicle_origin_carla_coordinate_waypoint[0])**2 + (vehicle_origin_carla_coordinate_waypoint[1])**2)
                     distance_3 = math.sqrt((vehicle_waypoint[0])**2 + (vehicle_waypoint[1])**2)
-                    print(f"CORD: [{i}] {carla_coordinate_waypoint} -> {vehicle_origin_carla_coordinate_waypoint} -> {vehicle_waypoint}")
-                    print(f"DIST: [{i}] {distance_1} -> {distance_2} -> {distance_3}")
+                    # print(f"CORD: [{i}] {carla_coordinate_waypoint} -> {vehicle_origin_carla_coordinate_waypoint} -> {vehicle_waypoint}")
+                    # print(f"DIST: [{i}] {distance_1} -> {distance_2} -> {distance_3}")
                     frame_waypoints[frame_id, i-1] = vehicle_waypoint
                     frame_waypoints_not_rotated[frame_id, i-1] = vehicle_origin_carla_coordinate_waypoint
                     break
@@ -525,13 +533,13 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         return speed
     # we calculate the first frame assuming the start speed is 0
     previous_speeds.append(0)
-    print(f"[PREV_{0}] speed = {0} m/s -> {0} km/h")
+    # print(f"[PREV_{0}] speed = {0} m/s -> {0} km/h")
     speeds = []
     for i in range(0, config.HOW_MANY_CARLA_FRAME_FOR_CALCULATING_SPEEDS+1, +1):
         speed = get_speed(i)
         speeds.append(speed)
     starting_next_speed = sum(speeds) / len(speeds)
-    print(f"[NEXT_{0}] speed = {starting_next_speed:.4f} m/s -> {starting_next_speed*3.6:.4f} km/h")
+    # print(f"[NEXT_{0}] speed = {starting_next_speed:.4f} m/s -> {starting_next_speed*3.6:.4f} km/h")
     next_speeds.append(starting_next_speed)
     # we calculate the speed for the following frames
     for frame_index in range(1, len(frame_gps_positions_array)):
@@ -540,14 +548,14 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             speed = get_speed(frame_index*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE + i)
             speeds.append(speed)
         mean_speed = sum(speeds) / len(speeds)
-        print(f"[PREV_{frame_index}] speed = {mean_speed:.4f} m/s -> {mean_speed*3.6:.4f} km/h")
+        # print(f"[PREV_{frame_index}] speed = {mean_speed:.4f} m/s -> {mean_speed*3.6:.4f} km/h")
         previous_speeds.append(mean_speed)
         speeds = []
         for i in range(0, config.HOW_MANY_CARLA_FRAME_FOR_CALCULATING_SPEEDS+1, +1):
             speed = get_speed(frame_index*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE + i)
             speeds.append(speed)
         mean_speed = sum(speeds) / len(speeds)
-        print(f"[NEXT_{frame_index}] speed = {mean_speed:.4f} m/s -> {mean_speed*3.6:.4f} km/h")
+        # print(f"[NEXT_{frame_index}] speed = {mean_speed:.4f} m/s -> {mean_speed*3.6:.4f} km/h")
         next_speeds.append(mean_speed)
     previous_speeds_array = np.array(previous_speeds)
     next_speeds_array = np.array(next_speeds)

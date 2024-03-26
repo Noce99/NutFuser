@@ -217,6 +217,7 @@ class GlobalConfig:
         'loss_semantic': 1.0,
         'loss_bev_semantic': 1.0,
         'loss_depth': 1.0,
+        'loss_flow' : 1.0,
         'loss_center_heatmap': 1.0,
         'loss_wh': 1.0,
         'loss_offset': 1.0,
@@ -244,6 +245,7 @@ class GlobalConfig:
     self.learn_multi_task_weights = False  # Whether to learn the multi-task weights
     self.use_bev_semantic = True  # Whether to use bev semantic segmentation as auxiliary loss for training.
     self.use_depth = True  # Whether to use depth prediction as auxiliary loss for training.
+    self.use_flow = True # Whether to use optical flow prediction as auxiliary loss for training.
     self.num_repetitions = 3  # How many repetitions of the dataset we train with.
     self.continue_epoch = True  # Whether to continue the training from the loaded epoch or from 0.
 

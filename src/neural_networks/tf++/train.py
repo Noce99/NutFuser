@@ -25,6 +25,7 @@ import cv2
 from config import GlobalConfig
 from model import LidarCenterNet
 from nut_data import backbone_dataset
+import nut_utils
 
 import pathlib
 import datetime
@@ -501,6 +502,9 @@ def main():
     if config.use_depth:
       model.depth_decoder.requires_grad_(False)
 
+    if config.use_flow:
+      model.flow_decoder.requires_grad_(False)
+
   # Synchronizing the Batch Norms increases the Batch size with which they are compute by *num_gpus
   if bool(args.sync_batch_norm):
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
@@ -720,11 +724,14 @@ class Engine(object):
     target_speed = None
     checkpoint = None
 
-    rgb = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+    rgb_a = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+    rgb_b = data["rgb_B_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+    rgb = torch.concatenate([rgb_a, rgb_b], dim=1)
     semantic_label = F.one_hot(data["semantic_0"][:, :, :, 0].type(torch.LongTensor), 8).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
     bev_semantic_label = F.one_hot(torch.rot90(data["bev_semantic"], 3, [1, 2])[:, :, :, 0].type(torch.LongTensor), 6).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
     depth_label = (data["depth_0"][:, :, :, 0]/255).contiguous().to(self.device, dtype=torch.float32)
     lidar = data["bev_lidar"][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+    flow_label = (data["optical_flow_0"][:, :, :, :2] / 2**15 - 1).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
 
     pred_wp,\
     pred_target_speed,\
@@ -734,7 +741,8 @@ class Engine(object):
     pred_depth, \
     pred_bounding_box, _, \
     pred_wp_1, \
-    selected_path = self.model(rgb=rgb,
+    selected_path, \
+    pred_flow = self.model(rgb=rgb,
                         lidar_bev=lidar,
                         target_point=target_point,
                         ego_vel=ego_vel,
@@ -747,6 +755,7 @@ class Engine(object):
                           pred_semantic=pred_semantic,
                           pred_bev_semantic=pred_bev_semantic,
                           pred_depth=pred_depth,
+                          pred_flow=pred_flow,
                           pred_bounding_box=pred_bounding_box,
                           waypoint_label=ego_waypoint,
                           target_speed_label=target_speed,
@@ -754,6 +763,7 @@ class Engine(object):
                           semantic_label=semantic_label,
                           bev_semantic_label=bev_semantic_label,
                           depth_label=depth_label,
+                          flow_label=flow_label,
                           center_heatmap_label=bb_center_heatmap,
                           wh_label=bb_wh,
                           yaw_class_label=bb_yaw_class,
@@ -834,7 +844,9 @@ class Engine(object):
       command = None
       ego_vel = None
 
-      rgb = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
+      rgb_a = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
+      rgb_b = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
+      rgb = torch.concatenate([rgb_a, rgb_b], dim=1)
       lidar = torch.from_numpy(data["bev_lidar"])[None, :][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
 
       pred_wp,\
@@ -845,15 +857,17 @@ class Engine(object):
       pred_depth, \
       pred_bounding_box, _, \
       pred_wp_1, \
-      selected_path = self.model(rgb=rgb,
-                          lidar_bev=lidar,
-                          target_point=target_point,
-                          ego_vel=ego_vel,
-                          command=command)
+      selected_path, \
+      pred_flow = self.model( rgb=rgb,
+                              lidar_bev=lidar,
+                              target_point=target_point,
+                              ego_vel=ego_vel,
+                              command=command)
       
       pred_depth = (pred_depth[0, :, :].detach().cpu().numpy()*255).astype(np.uint8)
       pred_semantic = torch.argmax(pred_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
       pred_bev_semantic = torch.argmax(pred_bev_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
+      pred_flow = ((pred_flow + 1)*(2**15)).permute(0, 2, 3, 1)[0, :, :, :].contiguous().detach().cpu().numpy()
 
       depth_comparison = np.zeros((pred_depth.shape[0]*2, pred_depth.shape[1]), dtype=np.uint8)
       depth_comparison[0:pred_depth.shape[0], :] = pred_depth
@@ -866,10 +880,17 @@ class Engine(object):
       bev_semantic_comparison = np.zeros((pred_bev_semantic.shape[0]*2, pred_bev_semantic.shape[1]), dtype=np.uint8)
       bev_semantic_comparison[0:pred_bev_semantic.shape[0], :] = pred_bev_semantic
       bev_semantic_comparison[pred_bev_semantic.shape[0]:, :] = np.rot90(data["bev_semantic"][:, :, 0], 3)
-      
+
+      flow_comparison = np.zeros((pred_flow.shape[0]*2, pred_flow.shape[1], 3), dtype=np.uint8)
+      print(f"PRED\t0 : [{np.min(pred_flow[:, :, 0])}; {np.max(pred_flow[:, :, 0])}] 1 : [{np.min(pred_flow[:, :, 1])}; {np.max(pred_flow[:, :, 1])}]")
+      print(f"LABEL\t0 : [{np.min(data['optical_flow_0'][:, :, 0])}; {np.max(data['optical_flow_0'][:, :, 0])}] 1 : [{np.min(data['optical_flow_0'][:, :, 1])}; {np.max(data['optical_flow_0'][:, :, 1])}]")
+      flow_comparison[0:pred_flow.shape[0], :, :] = nut_utils.optical_flow_to_human(pred_flow)
+      flow_comparison[pred_flow.shape[0]:, :, :] = nut_utils.optical_flow_to_human(data["optical_flow_0"][:, :, :2])
+
       cv2.imwrite(os.path.join(folder_path, f"depth_{k}.png"), depth_comparison)
       cv2.imwrite(os.path.join(folder_path, f"semantic_{k}.png"), semantic_comparison*30)
       cv2.imwrite(os.path.join(folder_path, f"bev_semantic_{k}.png"), bev_semantic_comparison*30)
+      cv2.imwrite(os.path.join(folder_path, f"flow_{k}.png"), flow_comparison)
       k += 1
     print("Finished to create Visual Evaluation Data!")
 

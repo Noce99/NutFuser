@@ -177,7 +177,7 @@ class backbone_dataset(Dataset):
         # Let's fill them with data
         index = 0
         for data_folder in self.data_folders:
-            for ii in range(1, data_folder.elements+1):
+            for ii in range(0, data_folder.elements):
                 self.data_path[index] = data_folder.path
                 self.data_id[index] = ii
                 if index <= self.last_frame_in_cache:
@@ -199,7 +199,11 @@ class backbone_dataset(Dataset):
             data = {}
             for data_folder in nut_config.DATASET_FOLDER_STRUCT:
                 data_name, data_extension = data_folder
-                data[data_name] = cv2.imread(os.path.join(self.dataset_path, path, data_name, f"{id}{data_extension}"))
+                if data_name[:-2] == "optical_flow":
+                    data[data_name] = cv2.imread(os.path.join(self.dataset_path, path, data_name, f"{id}{data_extension}"), cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
+                    data[data_name] = data[data_name].astype(np.float32)
+                else:
+                    data[data_name] = cv2.imread(os.path.join(self.dataset_path, path, data_name, f"{id}{data_extension}"))
             if data_should_be_in_cache:
                 data_compressed = {}
                 for data_folder in nut_config.DATASET_FOLDER_STRUCT:
