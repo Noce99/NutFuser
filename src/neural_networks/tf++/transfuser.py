@@ -34,8 +34,9 @@ class TransfuserBackbone(nn.Module):
     my_new_first_conv2d = torch.nn.modules.conv.Conv2d(in_channels=6, out_channels=32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
     pretrained_weights = self.image_encoder._modules['stem']._modules['conv'].weight.data.detach().clone()
     self.image_encoder._modules['stem']._modules['conv'] = my_new_first_conv2d
-    pretrained_weights = torch.concatenate([pretrained_weights, pretrained_weights], dim=1).contiguous()
+    pretrained_weights = torch.concatenate([pretrained_weights, pretrained_weights], dim=1).contiguous() / 2
     self.image_encoder._modules['stem']._modules['conv'].weight.data = pretrained_weights
+    # END NOCE
 
     self.lidar_video = False
     if config.lidar_architecture in ('video_resnet18', 'video_swin_tiny'): # NOT ENTERING

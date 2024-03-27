@@ -627,7 +627,7 @@ class LidarCenterNet(nn.Module):
       loss.update({'loss_depth': loss_depth})
     
     if self.config.use_flow:
-      loss_flow = nn.MSELoss(reduction="sum")(pred_flow, flow_label) # maybe reduction should be 
+      loss_flow = nn.MSELoss(reduction="mean")(pred_flow, flow_label) # maybe reduction should be sum?
       # print(f"pred_flow : [{torch.min(pred_flow)}; {torch.max(pred_flow)}]")
       # print(f"flow_label : [{torch.min(flow_label)}; {torch.max(flow_label)}]")
       loss.update({'loss_flow': loss_flow})
