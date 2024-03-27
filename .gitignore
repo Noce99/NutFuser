@@ -6,6 +6,7 @@ _out/
 include/
 src/neural_networks/train_logs/
 src/neural_networks/tf++/nut_tmp/*
+src/evaluation/maps_from_top/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
