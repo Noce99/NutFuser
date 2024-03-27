@@ -4,9 +4,11 @@ pyvenv.cfg
 share/
 _out/
 include/
-src/neural_networks/train_logs/
-src/neural_networks/tf++/nut_tmp/*
-src/evaluation/maps_from_top/*
+logs/
+nutfuser/neural_networks/train_logs/
+nutfuser/neural_networks/tf++/nut_tmp/*
+nutfuser/evaluation/maps_from_top/*
+datasets/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
