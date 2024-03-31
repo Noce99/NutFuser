@@ -145,6 +145,7 @@ if __name__ == "__main__":
 
     # (1) LAUNCH CARLA SERVER
     print("Launching Carla Server...")
+    os.environ["PATH"] = f"{os.environ['PATH']}:/leonardo/home/userexternal/emannocc/xdg-user-dirs-0.18/"
     carla_server_pid = multiprocessing.Value(c_int)
     carla_was_correctly_started_up = launch_carla_server_saifly_and_wait_till_its_up(
             rpc_port=args.rpc_port,
