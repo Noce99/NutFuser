@@ -73,7 +73,7 @@ def launch_carla_server_saifly_and_wait_till_its_up(rpc_port, carla_server_pid, 
             os.mkdir(os.path.dirname(logs_path))
         except:
             Exception(utils.color_error_string(f"Unable to find out log dir! [{os.path.dirname(logs_path)}]"))
-    if os.path.exists(logs_path):
+    if os.path.isfile(logs_path):
         os.remove(logs_path)
     with open(logs_path, 'w') as _:
         pass
