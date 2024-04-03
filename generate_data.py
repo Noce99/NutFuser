@@ -126,8 +126,8 @@ if __name__ == "__main__":
 
     # (0) SET UP LOGS AND DATASETFOLDER
     nutfuser_folder_path = pathlib.Path(__file__).parent.resolve()
-    carla_log_path = os.path.join(nutfuser_folder_path, "logs", "carla_server_logs.log")
-    traffic_manager_log_path = os.path.join(nutfuser_folder_path, "logs", "tarffic_manager_logs.log")
+    carla_log_path = os.path.join(nutfuser_folder_path, "logs", f"carla_server_logs_{args.job_id}.log")
+    traffic_manager_log_path = os.path.join(nutfuser_folder_path, "logs", f"tarffic_manager_logs_{args.job_id}.log")
     datasets_path = os.path.join(nutfuser_folder_path, "datasets")
 
     if not os.path.isdir(datasets_path):
@@ -151,7 +151,7 @@ if __name__ == "__main__":
             rpc_port=args.rpc_port,
             carla_server_pid=carla_server_pid,
             carlaUE4_path=carlaUE4_path,
-            logs_path=carla_log_path
+            logs_path=carla_log_path,
         )
 
     if not carla_was_correctly_started_up:
