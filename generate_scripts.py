@@ -62,7 +62,7 @@ if __name__ == "__main__":
     print(utils.color_info_string(f"Found Carla in {CARLA_PATH}!"))
 
     # GET NUTFUSER FOLDER
-    NUTFUSER = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+    NUTFUSER = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 
     # POPULATING scripts_and_jobs FOLDER
     """
