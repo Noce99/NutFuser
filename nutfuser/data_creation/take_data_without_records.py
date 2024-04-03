@@ -23,6 +23,7 @@ ALL_GPS_POSITIONS = []
 FRAME_COMPASS = []
 
 DISABLE_ALL_SENSORS = False
+KEEP_GPS = False
 
 def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_found_event, finished_taking_data_event, you_can_tick_event, how_many_frames, where_to_save):
 
@@ -174,7 +175,8 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     # GPS callback
     def gps_callback(data):
-        ALL_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
+        if not DISABLE_ALL_SENSORS or KEEP_GPS:
+            ALL_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
         if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             FRAME_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
             ALREADY_OBTAINED_DATA_FROM_SENSOR_B[19] = True
@@ -410,6 +412,8 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     # Let's Run Some Carla's Step to let everithing to be setted up
     global DISABLE_ALL_SENSORS
+    global KEEP_GPS
+    KEEP_GPS = False
     DISABLE_ALL_SENSORS = True
     for _ in tqdm(range(10), desc=utils.color_info_string("Warming Up...")):
         you_can_tick_event.set()
@@ -441,6 +445,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         ALREADY_OBTAINED_DATA_FROM_SENSOR_A = [False for _ in range(len(ALREADY_OBTAINED_DATA_FROM_SENSOR_A))]
         ALREADY_OBTAINED_DATA_FROM_SENSOR_B = [False for _ in range(len(ALREADY_OBTAINED_DATA_FROM_SENSOR_B))]
     DISABLE_ALL_SENSORS = True
+    KEEP_GPS = True
     for _ in tqdm(range(config.FRAME_TO_KEEP_GOING_AFTER_THE_END), desc=utils.color_info_string("I get the last gps data...")):
         world_snapshot = world.wait_for_tick()
         time.sleep(0.1)
@@ -468,6 +473,9 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     frame_compass_array = np.array(FRAME_COMPASS)
     np.save(os.path.join(os.path.join(where_to_save), "frame_compass.npy"), frame_compass_array)
     # NEXT 10 WAYPOINTS of 1 M distance
+    print(f"all_carla_positions_array = {all_carla_positions_array.shape}")
+    print(f"frame_carla_positions_array = {frame_carla_positions_array.shape}")
+    print(f"config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE = {config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE}")
     frame_waypoints = np.zeros((len(frame_carla_positions_array), config.NUM_OF_WAYPOINTS, 3))
     frame_waypoints_not_rotated = np.zeros((len(frame_carla_positions_array), config.NUM_OF_WAYPOINTS, 3))
     for frame_id in tqdm(range(len(frame_carla_positions_array)), desc=utils.color_info_string("Saving Waypoints...")):
