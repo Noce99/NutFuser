@@ -54,13 +54,12 @@ if __name__ == "__main__":
     done = False
     while not done:
         try:
-            carla_path = input("Where is the Carla folder? [absolute path] : ")
-            CARLAUE4 = os.path.join(carla_path, "CarlaUE4/Binaries/Linux/CarlaUE4-Linux-Shipping")
-            if os.path.isfile(CARLAUE4):
+            CARLA_PATH = input("Where is the Carla folder? [absolute path] : ")
+            if os.path.isdir(CARLA_PATH):
                 done = True
         except:
             done = False
-    print(utils.color_info_string(f"Found Carla in {CARLAUE4}!"))
+    print(utils.color_info_string(f"Found Carla in {CARLA_PATH}!"))
 
     # GET NUTFUSER FOLDER
     NUTFUSER = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
@@ -85,34 +84,9 @@ JOB_ID=$4
 echo "Selected Town = $TOWN"
 echo "Selected Port = $PORT"
 
-while true
-do
-echo "Starting Carla!"
-{CARLAUE4} -RenderOffScreen -nosound -carla-rpc-port=$PORT -opengl &
-PID_CARLA=$!
-echo "Waiting 60 s!"
-sleep 60
+
 cd {NUTFUSER}
-source bin/activate
-cd src/data_creation
-echo "Setting up the world!"
-python setup_world.py $TOWN $PORT
-echo "Waiting 10 s!"
-sleep 10
-echo "Starting generating the traffic!"
-python generate_traffic.py --hero -n 30 -w 30 --respawn --hybrid --port=$PORT --tm-port=$TM_PORT &
-PID_TRAFFIC=$!
-echo "Waiting 60 s!"
-sleep 60
-echo "STARTING GETTING DATA!"
-python take_data_without_records.py $TOWN $PORT $JOB_ID
-echo "Killing everything!"
-kill -9 $PID_TRAFFIC
-sleep 10
-kill -9 $PID_CARLA
-sleep 10
-echo "Killed everything!"
-done
+python generate_data.py --carla_path {CARLA_PATH} --town $TOWN --rpc_port $PORT --tm_port $TM_PORT --job_id $JOB_ID
 """
         )
     st = os.stat(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "launch_data_creation.sh"))
