@@ -46,8 +46,8 @@ if __name__ == "__main__":
     print(utils.color_info_string(f"I will create {num_of_jobs} job files!"))
     JOBS = [Job(id=i,
                 town=list(config.TOWN_DICT.keys())[i%len(config.TOWN_DICT.keys())],
-                port=3000+i*5,
-                tm_port=(3000+i*5)*2)
+                port=4377+i*5,
+                tm_port=(4377+i*5)*2)
             for i in range(num_of_jobs)]
 
     # ASK CARLA FOLDER
