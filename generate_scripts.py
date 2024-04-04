@@ -101,7 +101,7 @@ echo "Job on Town $TOWN started: $dt"
 
 cd {NUTFUSER}
 source bin/activate
-python generate_data.py --carla_path {CARLA_PATH} --town $TOWN --rpc_port $PORT --tm_port $TM_PORT --job_id $JOB_ID --dataset_path {config.DATASET_PATH} --num_of_frames 40000
+python generate_data.py --carla_path {CARLA_PATH} --town $TOWN --rpc_port $PORT --tm_port $TM_PORT --job_id $JOB_ID --dataset_path {config.DATASET_PATH} --num_of_frames 5000
 """         )
 
     with open(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "launch_all_jobs.sh"), "w") as file:
