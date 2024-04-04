@@ -47,9 +47,9 @@ def generate_traffic(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_
     with open(logs_path, 'w') as _:
         pass
     
-    with open(logs_path, "w") as out_err_logs_file:
-        sys.stdout = out_err_logs_file
-        sys.stderr = out_err_logs_file
+    out_err_logs_file = open(logs_path, "w")
+    sys.stdout = out_err_logs_file
+    sys.stderr = out_err_logs_file
 
     vehicles_list = []
     walkers_list = []
