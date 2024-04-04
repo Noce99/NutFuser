@@ -82,7 +82,7 @@ f"""#!/bin/sh
 #SBATCH --job-name=j_{job.id}
 #SBATCH --partition=boost_usr_prod
 #SBATCH -o {os.path.join(config.DATASET_PATH, "scripts_and_jobs", "logs", f"{job.id}", "out.log")}
-#SBATCH -e {os.path.join(config.DATASET_PATH, "scripts_and_jobs", "logs", f"{job.id}", "err.log")}
+#SBATCH -e {os.path.join(config.DATASET_PATH, "scripts_and_jobs", "logs", f"{job.id}", "out.log")}
 #SBATCH --mail-type=FAIL,BEGIN
 #SBATCH --mail-user=enrico.mannocci3@unibo.it
 #SBATCH --nodes=1
