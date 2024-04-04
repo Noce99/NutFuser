@@ -221,7 +221,7 @@ if __name__ == "__main__":
     # (0) SET UP LOGS AND DATASETFOLDER
     nutfuser_folder_path = pathlib.Path(__file__).parent.resolve()
     carla_log_path = os.path.join(nutfuser_folder_path, "logs", f"carla_server_logs_{args.job_id}.log")
-    traffic_manager_log_path = os.path.join(nutfuser_folder_path, "logs", f"tarffic_manager_logs_{args.job_id}.log")
+    traffic_manager_log_path = os.path.join(nutfuser_folder_path, "logs", f"traffic_manager_logs_{args.job_id}.log")
     datasets_path = args.dataset_path
 
     if not os.path.isdir(datasets_path):
@@ -234,7 +234,6 @@ if __name__ == "__main__":
     a_table = []
     for arg in vars(args):
         a_table.append([arg, getattr(args, arg)])
-    a_table.append(["Dataset Path", datasets_path])
     print(tabulate(a_table, headers=a_table_head, tablefmt="grid"))
 
     # LET'S RUN ALL

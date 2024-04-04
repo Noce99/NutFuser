@@ -47,24 +47,23 @@ def generate_traffic(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_
     with open(logs_path, 'w') as _:
         pass
     
-    out_err_logs_file = open(logs_path, "w")
-    sys.stdout = out_err_logs_file
-    sys.stderr = out_err_logs_file
+    with open(logs_path, "w") as out_err_logs_file:
+        sys.stdout = out_err_logs_file
+        sys.stderr = out_err_logs_file
 
     vehicles_list = []
     walkers_list = []
     all_id = []
+
     client = carla.Client(carla_ip, rpc_port)
     client.set_timeout(20.0)
     synchronous_master = False
     random.seed(int(time.time()))
 
-    print("Starting Traffic Manager!")
-
     try:
         world = client.get_world()
-
         traffic_manager = client.get_trafficmanager(tm_port)
+
         traffic_manager.set_global_distance_to_leading_vehicle(2.5)
         traffic_manager.set_respawn_dormant_vehicles(True)
         traffic_manager.set_hybrid_physics_mode(True)
@@ -230,7 +229,6 @@ def generate_traffic(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_
             if you_can_tick.is_set():
                 you_can_tick.clear()
                 world.tick()
-
     finally:
         settings = world.get_settings()
         settings.synchronous_mode = False
