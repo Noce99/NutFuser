@@ -64,7 +64,8 @@ def launch_carla_server_saifly_and_wait_till_its_up(rpc_port, carla_server_pid, 
                 exit()
         print("Seems that Carla server started, I will wait 100 seconds for checking its stability!")
         # The Carla process is up, we will wait 100 seconds just to be sure!
-        for i in tqdm(range(100)):
+        for i in tqdm(range(10)):
+            print("It's 10!")
             time.sleep(1)
     if not os.path.isdir(os.path.dirname(logs_path)):
         try:

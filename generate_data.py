@@ -87,6 +87,16 @@ def get_arguments():
         default=os.path.join(pathlib.Path(__file__).parent.resolve(), "datasets"),
         type=str
     )
+    argparser.add_argument(
+        '--back_camera',
+        help='Set if we want to add a camera in the back!',
+        action='store_true'
+    )
+    argparser.add_argument(
+        '--lateral_cameras',
+        help='Set if we want to add left and right lateral cameras!',
+        action='store_true'
+    )
     args = argparser.parse_args()
     if args.town not in config.TOWN_DICT:
         error = f"Invalid Town Index! [{args.town}]\n" + \
@@ -177,7 +187,8 @@ def run_all(args):
     data_creation_process = multiprocessing.Process(target=take_data_without_records.take_data_backbone,
                                                     args=(egg_file_path, args.town, args.rpc_port, args.job_id,
                                                           ego_vehicle_found_event, finished_taking_data_event,
-                                                          you_can_tick, args.num_of_frames, datasets_path))
+                                                          you_can_tick, args.num_of_frames, datasets_path,
+                                                          args.back_camera, args.lateral_cameras))
     data_creation_process.start()
     data_creation_pid.value = data_creation_process.pid
     pids_to_be_killed.append(data_creation_pid.value)

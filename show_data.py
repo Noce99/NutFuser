@@ -19,6 +19,8 @@ FRAME = 0
 MAX_FRAME = 400
 ACTUAL_SECTION = 0
 
+CAMERAS_INDEXES = []
+
 def set_section_title(screen, title):
     txt_img = FONT.render(title, True, SECTION_TITLE_COLOR)
     screen.blit(txt_img, (20, 20))
@@ -47,11 +49,12 @@ def print_section(screen, number, dataset_path):
     screen.fill(BACK_GROUD_COLOR)
     set_section_title(screen, titles_dict[number])
     show_frame_num_and_speeds(screen, dataset_path)
+
     if number in [0, 1, 2, 3, 4]:
         extention = ".png"
         if number in [0, 1]:
             extention = ".jpg"
-        for i in range(4):
+        for i in CAMERAS_INDEXES:
             folder_path = os.path.join(dataset_path, f"{folders_dict[number]}_{i}")
             img_path = os.path.join(folder_path, f"{FRAME}{extention}")
             if number in [0, 1, 2]:
@@ -102,6 +105,7 @@ def print_section(screen, number, dataset_path):
         y = SIDE_SPACE_SIZE + config.BEV_IMAGE_H
         rect.center = x, y
         screen.blit(img, rect)
+        # WAYPOINTS
         frame_waypoints_path = os.path.join(dataset_path, "frame_waypoints.npy")
         if os.path.isfile(frame_waypoints_path):
             frame_waypoints = np.load(frame_waypoints_path)
@@ -202,8 +206,19 @@ def print_section(screen, number, dataset_path):
 
 def check_dataset_folder(dataset_path):
     all_files = os.listdir(dataset_path)
+
+    global CAMERAS_INDEXES
+    CAMERAS_INDEXES = [int(el[len("rgb_A_"):]) for el in all_files if "rgb_A_" in el]
+
+    folder_to_search =  [(f"rgb_A_{i}", ".jpg") for i in CAMERAS_INDEXES] +\
+                        [(f"rgb_B_{i}", ".jpg") for i in CAMERAS_INDEXES] +\
+                        [(f"depth_{i}", ".png") for i in CAMERAS_INDEXES] +\
+                        [(f"optical_flow_{i}", ".png") for i in CAMERAS_INDEXES] +\
+                        [(f"semantic_{i}", ".png") for i in CAMERAS_INDEXES] +\
+                        [("bev_semantic", ".png"),      ("bev_lidar", ".png")]
+
     max_index = None
-    for folder, extention in config.DATASET_FOLDER_STRUCT:
+    for folder, extention in folder_to_search:
         if folder not in all_files:
             raise Exception(utils.color_error_string(f"Cannot find out {folder} in '{dataset_path}'"))
         all_frames = os.listdir(os.path.join(dataset_path, folder))
