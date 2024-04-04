@@ -27,8 +27,8 @@ MINIMUM_LIDAR_HEIGHT = 0.3 # m
 MAXIMUM_LIDAR_HEIGHT = 3 # m
 FRAME_TO_KEEP_GOING_AFTER_THE_END = AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE*60 # we want to be sure to explore enaught space fro the last waypoint ground truth
 HOW_MANY_CARLA_FRAME_FOR_CALCULATING_SPEEDS = 3
-TOWN_DICT = {1:  "Town01_Opt", 2:  "Town02_Opt", 3:  "Town03_Opt", 4:  "Town04_Opt",
-             5:  "Town05_Opt", 6:  "Town06_Opt", 7:  "Town07_Opt", 10: "Town10HD_Opt",
+TOWN_DICT = {1:  "Town01", 2:  "Town02", 3:  "Town03", 4:  "Town04",
+             5:  "Town05", 6:  "Town06", 7:  "Town07", 10: "Town10HD",
              12: "Town12",     13: "Town13",     15: "Town15"}
 SELECTED_TOWN_NAME = "Town15"
 
