@@ -61,9 +61,9 @@ def launch_carla_server_saifly_and_wait_till_its_up(rpc_port, carla_server_pid, 
             if return_code is not None:
                 # The Carla process died before starting up!
                 exit()
-        print("Seems that Carla server started, I will wait 10 seconds for checking its stability!")
-        # The Carla process is up, we will wait 10 second just to be sure!
-        for i in range(10):
+        print("Seems that Carla server started, I will wait 20 seconds for checking its stability!")
+        # The Carla process is up, we will wait 20 seconds just to be sure!
+        for i in range(20):
             time.sleep(1)
             print(i+1, end=", ", flush=True)
         print()
