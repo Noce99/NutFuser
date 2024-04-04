@@ -79,7 +79,7 @@ if __name__ == "__main__":
         with open(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "jobs", f"job_{job.id}.sh"), "w") as file:
             file.write(
 f"""#!/bin/sh
-#SBATCH --job-name=creation_job_0
+#SBATCH --job-name=j_{job.id}
 #SBATCH --partition=boost_usr_prod
 #SBATCH -o {os.path.join(config.DATASET_PATH, "scripts_and_jobs", "logs", f"{job.id}", "out.log")}
 #SBATCH -e {os.path.join(config.DATASET_PATH, "scripts_and_jobs", "logs", f"{job.id}", "err.log")}

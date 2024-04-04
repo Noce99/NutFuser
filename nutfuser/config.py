@@ -7,6 +7,7 @@ DATASET_PATH = "/home/enrico/Downloads/nut_dataset_test" # "/leonardo_work/IscrC
 VALIDATION_DATASET_PATH = "/home/enrico/Downloads/nut_dataset_old/nut_dataset_test"
 
 # TAKE DATA
+MAX_NUM_OF_ATTEMPS = 10 # maximum number of attempts to sturt up all the carla's chain!
 CARLA_FPS = 20
 IMAGE_W = 1024
 IMAGE_H = 256

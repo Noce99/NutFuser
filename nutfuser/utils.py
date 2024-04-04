@@ -184,4 +184,10 @@ def optical_flow_to_human_slow(optical_flow_path):
             output[i, j, 2] = B
     return output
 
-# muahahahahahaahahahaah Noce was here!
+class NutException(Exception):
+    """
+    Exception Raised during Carla's StartUp!
+    """
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)

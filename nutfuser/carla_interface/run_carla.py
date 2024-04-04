@@ -127,10 +127,11 @@ def set_up_traffic_manager_saifly_and_wait_till_its_up(carla_ip, rpc_port, tm_po
     while True:
         if not psutil.pid_exists(carla_server_pid.value):
             set_up_traffic_manager_process.kill()
-            return False, True, you_can_tick, traffic_manager_is_up     # Means Carla Crashed!
+            return False, True, you_can_tick, traffic_manager_is_up, set_up_traffic_manager_process     # Means Carla Crashed!
         if not set_up_traffic_manager_process.is_alive():
             set_up_traffic_manager_process.join()
             os.kill(carla_server_pid.value, signal.SIGKILL)
-            return True, False, you_can_tick, traffic_manager_is_up    # Means Traffic Manager Crashed!
+            return True, False, you_can_tick, traffic_manager_is_up, set_up_traffic_manager_process   # Means Traffic Manager Crashed!
         if traffic_manager_is_up.is_set():
-            return True, True, you_can_tick, traffic_manager_is_up      # Means everything good!
+            return True, True, you_can_tick, traffic_manager_is_up, set_up_traffic_manager_process     # Means everything good!
+        
