@@ -93,7 +93,7 @@ f"""#!/bin/sh
 
 TOWN={job.town}
 PORT={job.port}
-TM_PORT={job.tm_port}
+TM_PORT=8000
 JOB_ID={job.id}
 
 dt=$(date '+%d/%m/%Y %H:%M:%S');
