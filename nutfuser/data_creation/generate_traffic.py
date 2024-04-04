@@ -55,9 +55,11 @@ def generate_traffic(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_
     walkers_list = []
     all_id = []
     client = carla.Client(carla_ip, rpc_port)
-    client.set_timeout(10.0)
+    client.set_timeout(20.0)
     synchronous_master = False
     random.seed(int(time.time()))
+
+    print("Starting Traffic Manager!")
 
     try:
         world = client.get_world()

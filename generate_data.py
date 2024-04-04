@@ -48,16 +48,6 @@ def get_arguments():
         type=int
     )
     argparser.add_argument(
-        '--backbone_data',
-        help='If you want to generate backbone data',
-        action='store_true'
-    )
-    argparser.add_argument(
-        '--driving_data',
-        help='If you want to generate backbone data',
-        action='store_true'
-    )
-    argparser.add_argument(
         '--end_of_egg_file',
         help='How the egg file should end to be valid! (default: py3.7-linux-x86_64.egg)',
         default="py3.7-linux-x86_64.egg",
@@ -89,6 +79,13 @@ def get_arguments():
         required=False,
         default=10,
         type=int
+    )
+    argparser.add_argument(
+        '--dataset_path',
+        help='Where to save the data!',
+        required=False,
+        default=os.path.join(pathlib.Path(__file__).parent.resolve(), "datasets"),
+        type=str
     )
     args = argparser.parse_args()
     if args.town not in config.TOWN_DICT:
@@ -179,7 +176,7 @@ def run_all(args):
     finished_taking_data_event = multiprocessing.Event()
     data_creation_process = multiprocessing.Process(target=take_data_without_records.take_data_backbone,
                                                     args=(egg_file_path, args.town, args.rpc_port, args.job_id,
-                                                          ego_vehicle_found_event,finished_taking_data_event,
+                                                          ego_vehicle_found_event, finished_taking_data_event,
                                                           you_can_tick, args.num_of_frames, datasets_path))
     data_creation_process.start()
     data_creation_pid.value = data_creation_process.pid
@@ -225,7 +222,7 @@ if __name__ == "__main__":
     nutfuser_folder_path = pathlib.Path(__file__).parent.resolve()
     carla_log_path = os.path.join(nutfuser_folder_path, "logs", f"carla_server_logs_{args.job_id}.log")
     traffic_manager_log_path = os.path.join(nutfuser_folder_path, "logs", f"tarffic_manager_logs_{args.job_id}.log")
-    datasets_path = os.path.join(nutfuser_folder_path, "datasets")
+    datasets_path = args.dataset_path
 
     if not os.path.isdir(datasets_path):
         try:
