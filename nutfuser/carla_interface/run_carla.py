@@ -94,7 +94,7 @@ def set_up_world_saifly_and_wait_till_its_setted_up(carla_ip, rpc_port, town_num
         except:
             raise Exception(utils.color_error_string(f"Not able to import Carla!"))
         client = carla.Client(carla_ip, rpc_port)
-        client.set_timeout(20.0)
+        client.set_timeout(100.0)
         client.load_world(config.TOWN_DICT[town_number])
         world_setted_up.set()
 
