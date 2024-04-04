@@ -114,3 +114,4 @@ cd {os.path.join(config.DATASET_PATH, "scripts_and_jobs", "jobs")}
 """     )
         for job in JOBS:
             file.write(f"sbatch job_{job.id}.sh\n")
+        file.write("cd ..")
