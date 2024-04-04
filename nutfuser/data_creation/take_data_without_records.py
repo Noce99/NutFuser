@@ -473,9 +473,6 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     frame_compass_array = np.array(FRAME_COMPASS)
     np.save(os.path.join(os.path.join(where_to_save), "frame_compass.npy"), frame_compass_array)
     # NEXT 10 WAYPOINTS of 1 M distance
-    print(f"all_carla_positions_array = {all_carla_positions_array.shape}")
-    print(f"frame_carla_positions_array = {frame_carla_positions_array.shape}")
-    print(f"config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE = {config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE}")
     frame_waypoints = np.zeros((len(frame_carla_positions_array), config.NUM_OF_WAYPOINTS, 3))
     frame_waypoints_not_rotated = np.zeros((len(frame_carla_positions_array), config.NUM_OF_WAYPOINTS, 3))
     for frame_id in tqdm(range(len(frame_carla_positions_array)), desc=utils.color_info_string("Saving Waypoints...")):

@@ -72,26 +72,6 @@ if __name__ == "__main__":
     terminal 3: python3 spawn_npc.py --port 4000 --tm-port 4050 # TM-Server A connected to simulation A
     terminal 4: python3 spawn_npc.py --port 5000 --tm-port 5050 # TM-Server B connected to simulation B
     """
-    with open(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "launch_data_creation.sh"), "w") as file:
-        file.write(
-f"""#!/bin/sh
-PATH=$PATH:/leonardo/home/userexternal/emannocc/xdg-user-dirs-0.18/
-
-TOWN=$1
-PORT=$2
-TM_PORT=$3
-JOB_ID=$4
-echo "Selected Town = $TOWN"
-echo "Selected Port = $PORT"
-
-
-cd {NUTFUSER}
-python generate_data.py --carla_path {CARLA_PATH} --town $TOWN --rpc_port $PORT --tm_port $TM_PORT --job_id $JOB_ID
-"""
-        )
-    st = os.stat(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "launch_data_creation.sh"))
-    os.chmod(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "launch_data_creation.sh"), st.st_mode | stat.S_IEXEC) # chmod +x
-
     os.mkdir(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "jobs"))
     os.mkdir(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "logs"))
     for job in JOBS:
@@ -120,7 +100,9 @@ JOB_ID={job.id}
 dt=$(date '+%d/%m/%Y %H:%M:%S');
 echo "Job on Town $TOWN started: $dt"
 
-{os.path.join(config.DATASET_PATH, "scripts_and_jobs", "launch_data_creation.sh")} $TOWN $PORT $TM_PORT $JOB_ID
+cd {NUTFUSER}
+source bin/activate
+python generate_data.py --carla_path {CARLA_PATH} --town $TOWN --rpc_port $PORT --tm_port $TM_PORT --job_id $JOB_ID
 """         )
 
     with open(os.path.join(config.DATASET_PATH, "scripts_and_jobs", "launch_all_jobs.sh"), "w") as file:
