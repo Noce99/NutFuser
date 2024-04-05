@@ -8,6 +8,7 @@ import sys
 sys.path.append("/leonardo_work/IscrC_SSNeRF/CARLA_0.9.15/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
 sys.path.append("/home/enrico/Progetti/Carla/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
 sys.path.append("/home/enrico/Projects/Carla/CARLA_0.9.15/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
+sys.path.append("/leonardo_scratch/fast/IscrC_SSNeRF/CARLA_0_9_15/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
 import carla
 import numpy as np
 import torch
