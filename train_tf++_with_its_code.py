@@ -8,6 +8,7 @@ import psutil
 import signal
 import time
 from tqdm import tqdm
+import torch
 
 from nutfuser import utils
 
@@ -126,9 +127,12 @@ if __name__=="__main__":
         os.mkdir(os.path.join(train_logs_folder, "output_log"))
     output_log = os.path.join(train_logs_folder, "output_log", f"{current_time}")
 
+    num_of_gpu = torch.cuda.device_count()
+    print(f"Found out {num_of_gpu} GPUs!")
+
     with open(output_log, 'w') as logs_file:
         train_process = subprocess.Popen(
-                    [shell_train_path, f"{venv_to_source_path}", f"{train_script_path}", f"{args.dataset_train}", f"{args.dataset_validation}", f"{train_logs_folder}", f"{args.batch_size}", f"{args.train_flow}"],
+                    [shell_train_path, f"{venv_to_source_path}", f"{train_script_path}", f"{args.dataset_train}", f"{args.dataset_validation}", f"{train_logs_folder}", f"{args.batch_size}", f"{args.train_flow}", f"{num_of_gpu}"],
                     universal_newlines=True,
                     stdout=logs_file,
                     stderr=logs_file,
