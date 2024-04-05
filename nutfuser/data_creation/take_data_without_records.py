@@ -49,7 +49,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     # Connect the client and set up bp library
     client = carla.Client('localhost', rpc_port)
-    client.set_timeout(20.0)
+    client.set_timeout(60.0)
     world = client.get_world()
     settings = world.get_settings()
     settings.synchronous_mode = True

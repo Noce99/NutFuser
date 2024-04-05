@@ -9,6 +9,8 @@ nutfuser/neural_networks/train_logs/
 nutfuser/neural_networks/tf++/nut_tmp/*
 nutfuser/evaluation/maps_from_top/*
 datasets/
+nut_tmp/
+train_logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

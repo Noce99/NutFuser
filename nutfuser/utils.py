@@ -2,6 +2,7 @@ from termcolor import colored
 import numpy as np
 import math
 import cv2
+import os
 
 def color_error_string(string):
     return colored(string, "red", attrs=["bold"]) # , "blink"
@@ -191,3 +192,29 @@ class NutException(Exception):
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
+
+def check_dataset_folder(dataset_path):
+    all_files = os.listdir(dataset_path)
+    camera_indexes = [int(el[len("rgb_A_"):]) for el in all_files if "rgb_A_" in el]
+
+    folder_that_should_be_there =  [(f"rgb_A_{i}", ".jpg") for i in camera_indexes] +\
+                        [(f"rgb_B_{i}", ".jpg") for i in camera_indexes] +\
+                        [(f"depth_{i}", ".png") for i in camera_indexes] +\
+                        [(f"optical_flow_{i}", ".png") for i in camera_indexes] +\
+                        [(f"semantic_{i}", ".png") for i in camera_indexes] +\
+                        [("bev_semantic", ".png"),      ("bev_lidar", ".png")]
+    max_index = None
+    for folder, extention in folder_that_should_be_there:
+        if folder not in all_files:
+            raise Exception(color_error_string(f"Cannot find out {folder} in '{dataset_path}'"))
+        all_frames = os.listdir(os.path.join(dataset_path, folder))
+        try:
+            all_index = [int(frame[:-len(extention)]) for frame in all_frames]
+            if max_index is None:
+                max_index = max(all_index)
+            for i in range(0, max_index):
+                if i not in all_index:
+                    raise Exception(color_error_string(f"Missing frame {i} in '{os.path.join(dataset_path, folder)}'\n[{all_frames}]"))
+        except:
+            raise Exception(color_error_string(f"Some strange frame name inside '{os.path.join(dataset_path, folder)}'\n[{all_frames}]"))
+    return camera_indexes, max_index

@@ -333,7 +333,10 @@ def main():
                         default=int(config.multi_wp_output),
                         help='Predict 2 WP outputs and select between them. '
                         'Only compatible with use_wp=1, transformer_decoder_join=1')
-
+    parser.add_argument('--use_flow',
+                        type=int,
+                        default=int(config.use_flow),
+                        help='Predict Otpical Flow')
     args = parser.parse_args()
     args.logdir = os.path.join(args.logdir, args.id)
 
@@ -867,7 +870,8 @@ class Engine(object):
             pred_depth = (pred_depth[0, :, :].detach().cpu().numpy()*255).astype(np.uint8)
             pred_semantic = torch.argmax(pred_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
             pred_bev_semantic = torch.argmax(pred_bev_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
-            pred_flow = ((pred_flow + 1)*(2**15)).permute(0, 2, 3, 1)[0, :, :, :].contiguous().detach().cpu().numpy()
+            if self.config.use_flow:
+                pred_flow = ((pred_flow + 1)*(2**15)).permute(0, 2, 3, 1)[0, :, :, :].contiguous().detach().cpu().numpy()
 
             depth_comparison = np.zeros((pred_depth.shape[0]*2, pred_depth.shape[1]), dtype=np.uint8)
             depth_comparison[0:pred_depth.shape[0], :] = pred_depth
@@ -881,16 +885,18 @@ class Engine(object):
             bev_semantic_comparison[0:pred_bev_semantic.shape[0], :] = pred_bev_semantic
             bev_semantic_comparison[pred_bev_semantic.shape[0]:, :] = np.rot90(data["bev_semantic"][:, :, 0], 3)
 
-            flow_comparison = np.zeros((pred_flow.shape[0]*2, pred_flow.shape[1], 3), dtype=np.uint8)
-            print(f"PRED\t0 : [{np.min(pred_flow[:, :, 0])}; {np.max(pred_flow[:, :, 0])}] 1 : [{np.min(pred_flow[:, :, 1])}; {np.max(pred_flow[:, :, 1])}]")
-            print(f"LABEL\t0 : [{np.min(data['optical_flow_0'][:, :, 0])}; {np.max(data['optical_flow_0'][:, :, 0])}] 1 : [{np.min(data['optical_flow_0'][:, :, 1])}; {np.max(data['optical_flow_0'][:, :, 1])}]")
-            flow_comparison[0:pred_flow.shape[0], :, :] = nut_utils.optical_flow_to_human(pred_flow)
-            flow_comparison[pred_flow.shape[0]:, :, :] = nut_utils.optical_flow_to_human(data["optical_flow_0"][:, :, :2])
+            if self.config.use_flow:
+                flow_comparison = np.zeros((pred_flow.shape[0]*2, pred_flow.shape[1], 3), dtype=np.uint8)
+                print(f"PRED\t0 : [{np.min(pred_flow[:, :, 0])}; {np.max(pred_flow[:, :, 0])}] 1 : [{np.min(pred_flow[:, :, 1])}; {np.max(pred_flow[:, :, 1])}]")
+                print(f"LABEL\t0 : [{np.min(data['optical_flow_0'][:, :, 0])}; {np.max(data['optical_flow_0'][:, :, 0])}] 1 : [{np.min(data['optical_flow_0'][:, :, 1])}; {np.max(data['optical_flow_0'][:, :, 1])}]")
+                flow_comparison[0:pred_flow.shape[0], :, :] = nut_utils.optical_flow_to_human(pred_flow)
+                flow_comparison[pred_flow.shape[0]:, :, :] = nut_utils.optical_flow_to_human(data["optical_flow_0"][:, :, :2])
 
             cv2.imwrite(os.path.join(folder_path, f"depth_{k}.png"), depth_comparison)
             cv2.imwrite(os.path.join(folder_path, f"semantic_{k}.png"), semantic_comparison*30)
             cv2.imwrite(os.path.join(folder_path, f"bev_semantic_{k}.png"), bev_semantic_comparison*30)
-            cv2.imwrite(os.path.join(folder_path, f"flow_{k}.png"), flow_comparison)
+            if self.config.use_flow:
+                cv2.imwrite(os.path.join(folder_path, f"flow_{k}.png"), flow_comparison)
             k += 1
         print("Finished to create Visual Evaluation Data!")
 

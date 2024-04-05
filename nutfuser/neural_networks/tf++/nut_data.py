@@ -39,6 +39,8 @@ class backbone_dataset(Dataset):
         else:
             self.cache_size_limit = 0
 
+        self.folders_that_should_be_there = None
+
         self.set_up_cache()
         self.total_number_of_frames = self.check_dataset_and_get_data_folders()
         self.bytes_per_frame = self.get_one_frame_memory_size()
@@ -82,10 +84,25 @@ class backbone_dataset(Dataset):
     def check_dataset_and_get_data_folders(self):
         if not os.path.isdir(self.dataset_path):
             raise Exception(nut_utils.color_error_string("No Dataset folder found!"))
+        
+        random_data_folder = None
+        for el in os.listdir(self.dataset_path):
+            if os.path.isdir(os.path.join(self.dataset_path, el)):
+                random_data_folder = os.path.join(self.dataset_path, el)
+                break
+        all_files = os.listdir(random_data_folder)
+        camera_indexes = [int(el[len("rgb_A_"):]) for el in all_files if "rgb_A_" in el]
+
+        self.folders_that_should_be_there =  [(f"rgb_A_{i}", ".jpg") for i in camera_indexes] +\
+                            [(f"rgb_B_{i}", ".jpg") for i in camera_indexes] +\
+                            [(f"depth_{i}", ".png") for i in camera_indexes] +\
+                            [(f"optical_flow_{i}", ".png") for i in camera_indexes] +\
+                            [(f"semantic_{i}", ".png") for i in camera_indexes] +\
+                            [("bev_semantic", ".png"),      ("bev_lidar", ".png")]
 
         def check_that_all_sensors_have_the_same_ammount_of_frame(data_folder_path):
             min_number_of_frames = None
-            for data_subfolder in nut_config.DATASET_FOLDER_STRUCT:
+            for data_subfolder in self.folders_that_should_be_there:
                 subfolder_to_check = os.path.join(data_folder_path, data_subfolder[0])
                 files = os.listdir(subfolder_to_check)
                 if min_number_of_frames is None:
@@ -101,7 +118,7 @@ class backbone_dataset(Dataset):
             if len(dirs) == 0:
                 continue
             good = True
-            for el in nut_config.DATASET_FOLDER_STRUCT:
+            for el in self.folders_that_should_be_there:
                 if el[0] not in dirs:
                     good = False
                     break
@@ -198,7 +215,7 @@ class backbone_dataset(Dataset):
         data_already_in_cache = self.data_already_in_cache[idx]
         if not data_already_in_cache:
             data = {}
-            for data_folder in nut_config.DATASET_FOLDER_STRUCT:
+            for data_folder in self.folders_that_should_be_there:
                 data_name, data_extension = data_folder
                 if data_name[:-2] == "optical_flow":
                     data[data_name] = cv2.imread(os.path.join(self.dataset_path, path, data_name, f"{id}{data_extension}"), cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
@@ -207,7 +224,7 @@ class backbone_dataset(Dataset):
                     data[data_name] = cv2.imread(os.path.join(self.dataset_path, path, data_name, f"{id}{data_extension}"))
             if data_should_be_in_cache:
                 data_compressed = {}
-                for data_folder in nut_config.DATASET_FOLDER_STRUCT:
+                for data_folder in self.folders_that_should_be_there:
                     data_name, data_extension = data_folder
                     data_compressed[data_name] = cv2.imencode(data_extension, data[data_name])
                 self.cache[idx] = data_compressed
@@ -216,7 +233,7 @@ class backbone_dataset(Dataset):
             print("Trying to get data from cache!")
             data_compressed = self.cache[idx]
             data = {}
-            for data_folder in nut_config.DATASET_FOLDER_STRUCT:
+            for data_folder in self.folders_that_should_be_there:
                 data_name, data_extension = data_folder
                 data[data_name] = cv2.imdecode(data_compressed[data_name], cv2.IMREAD_UNCHANGED)
         for key in data:

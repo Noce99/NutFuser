@@ -204,33 +204,9 @@ def print_section(screen, number, dataset_path):
 
     pygame.display.update()
 
-def check_dataset_folder(dataset_path):
-    all_files = os.listdir(dataset_path)
-
+def custom_check_dataset_folder(dataset_path):
     global CAMERAS_INDEXES
-    CAMERAS_INDEXES = [int(el[len("rgb_A_"):]) for el in all_files if "rgb_A_" in el]
-
-    folder_to_search =  [(f"rgb_A_{i}", ".jpg") for i in CAMERAS_INDEXES] +\
-                        [(f"rgb_B_{i}", ".jpg") for i in CAMERAS_INDEXES] +\
-                        [(f"depth_{i}", ".png") for i in CAMERAS_INDEXES] +\
-                        [(f"optical_flow_{i}", ".png") for i in CAMERAS_INDEXES] +\
-                        [(f"semantic_{i}", ".png") for i in CAMERAS_INDEXES] +\
-                        [("bev_semantic", ".png"),      ("bev_lidar", ".png")]
-
-    max_index = None
-    for folder, extention in folder_to_search:
-        if folder not in all_files:
-            raise Exception(utils.color_error_string(f"Cannot find out {folder} in '{dataset_path}'"))
-        all_frames = os.listdir(os.path.join(dataset_path, folder))
-        try:
-            all_index = [int(frame[:-len(extention)]) for frame in all_frames]
-            if max_index is None:
-                max_index = max(all_index)
-            for i in range(0, max_index):
-                if i not in all_index:
-                    raise Exception(utils.color_error_string(f"Missing frame {i} in '{os.path.join(dataset_path, folder)}'\n[{all_frames}]"))
-        except:
-            raise Exception(utils.color_error_string(f"Some strange frame name inside '{os.path.join(dataset_path, folder)}'\n[{all_frames}]"))
+    CAMERAS_INDEXES, max_index = utils.check_dataset_folder(dataset_path)
     global MAX_FRAME
     if MAX_FRAME is None:
         raise Exception(utils.color_error_string(f"WTF?! MAX_FRAME is None?"))
@@ -245,7 +221,7 @@ if __name__ == "__main__":
         type=str
     )
     args = argparser.parse_args()
-    check_dataset_folder(args.dataset_path)
+    custom_check_dataset_folder(args.dataset_path)
 
     pygame.init()
     FONT = pygame.font.SysFont(None, 48)
