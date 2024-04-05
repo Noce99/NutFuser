@@ -6,6 +6,7 @@ atomic_criteria.py
 import math
 import sys
 sys.path.append("/home/enrico/Projects/Carla/CARLA_0.9.15/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
+sys.path.append("/leonardo_scratch/fast/CARLA_0.9.15/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
 import carla
 import numpy as np
 import torch
