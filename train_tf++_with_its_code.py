@@ -7,6 +7,7 @@ import datetime
 import psutil
 import signal
 import time
+from tqdm import tqdm
 
 from nutfuser import utils
 
@@ -74,14 +75,15 @@ def get_arguments():
         raise  utils.NutException(utils.color_error_string(
             f"The file '{args.weight}' does not exist!"))
     # THERE I PROPERLY CHECK THAT THE DATASETFOLDERS ARE GOOD BUILTED
-    for folder in os.listdir(args.dataset_train):
+    for folder in tqdm(os.listdir(args.dataset_train)):
         folder_path = os.path.join(args.dataset_train, folder)
         if os.path.isdir(folder_path):
             utils.check_dataset_folder(folder_path)
-    for folder in os.listdir(args.dataset_validation):
-        folder_path = os.path.join(args.dataset_validation, folder)
-        if os.path.isdir(folder_path):
-            utils.check_dataset_folder(folder_path)
+    if args.dataset_validation != args.dataset_train:
+        for folder in tqdm(os.listdir(args.dataset_validation)):
+            folder_path = os.path.join(args.dataset_validation, folder)
+            if os.path.isdir(folder_path):
+                utils.check_dataset_folder(folder_path)
     if args.train_flow:
         args.train_flow = 1
     else:
