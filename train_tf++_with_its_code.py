@@ -34,7 +34,7 @@ def get_arguments():
         required=False,
         default=None,
         type=str
-    )
+    )type=str
     argparser.add_argument(
         '--just_backbone',
         help='Set if you want to train just the backbone!',
@@ -51,6 +51,13 @@ def get_arguments():
         '--train_flow',
         help='If set we train also Optical Flow!',
         action='store_true'
+    )
+    argparser.add_argument(
+        "--weights_path",
+        help="Path to the pretrained weights!",
+        default=None,
+        required=False,
+        type=str
     )
     args = argparser.parse_args()
     # THERE I CHECK THE ARGUMENTS
@@ -130,9 +137,24 @@ if __name__=="__main__":
     num_of_gpu = torch.cuda.device_count()
     print(f"Found out {num_of_gpu} GPUs!")
 
+    if args.weights_path is None:
+        start_epoch = 0
+    else:
+        start_epoch = 15
+
     with open(output_log, 'w') as logs_file:
         train_process = subprocess.Popen(
-                    [shell_train_path, f"{venv_to_source_path}", f"{train_script_path}", f"{args.dataset_train}", f"{args.dataset_validation}", f"{train_logs_folder}", f"{args.batch_size}", f"{args.train_flow}", f"{num_of_gpu}"],
+                    [   shell_train_path,
+                        f"{venv_to_source_path}",
+                        f"{train_script_path}",
+                        f"{args.dataset_train}",
+                        f"{args.dataset_validation}",
+                        f"{train_logs_folder}",
+                        f"{args.batch_size}",
+                        f"{args.train_flow}",
+                        f"{num_of_gpu}",
+                        f"{args.weights_path}",
+                        f"{start_epoch}"],
                     universal_newlines=True,
                     stdout=logs_file,
                     stderr=logs_file,

@@ -11,6 +11,7 @@ nutfuser/evaluation/maps_from_top/*
 datasets/
 nut_tmp/
 train_logs/
+nutfuser/data_creation/matteo_event_camera.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

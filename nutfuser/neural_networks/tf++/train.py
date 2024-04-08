@@ -481,6 +481,8 @@ def main():
     model.cuda(device=device)
 
     start_epoch = 0  # Epoch to continue training from
+    if args.load_file == "None":
+        args.load_file = None
     if not args.load_file is None:
         # Load checkpoint
         print('=============load=================')
