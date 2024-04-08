@@ -34,7 +34,7 @@ def get_arguments():
         required=False,
         default=None,
         type=str
-    )type=str
+    )
     argparser.add_argument(
         '--just_backbone',
         help='Set if you want to train just the backbone!',
