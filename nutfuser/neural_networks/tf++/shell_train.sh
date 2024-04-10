@@ -9,7 +9,7 @@ BATCH_SIZE=$6
 TRAIN_FLOW=$7
 NUM_OF_GPU=$8
 WEIGHT_PATH=$9
-STARTING_EPOCH=$10
+STARTING_EPOCH=${10}
 
 source $VENV_TO_SURCE_PATH
 export OMP_NUM_THREADS=20  # Limits pytorch to spawn at most num cpus cores threads
