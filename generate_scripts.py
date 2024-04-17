@@ -130,7 +130,7 @@ echo "Job on Town $TOWN started: $dt"
 
 cd {NUTFUSER}
 source bin/activate
-python generate_data.py --carla_path {CARLA_PATH} --town $TOWN --rpc_port $PORT --tm_port $TM_PORT --job_id $JOB_ID --dataset_path {config.DATASET_PATH} --num_of_frames {num_of_frames} --num_of_vehicle {num_of_npc} --num_of_walkers {num_of_npc}
+python generate_data.py --carla_path {CARLA_PATH} --town $TOWN --rpc_port $PORT --tm_port $TM_PORT --job_id $JOB_ID --dataset_path {os.path.join(NUTFUSER, "datasets")} --num_of_frames {num_of_frames} --num_of_vehicle {num_of_npc} --num_of_walkers {num_of_npc}
 """         )
 
     with open(os.path.join(script_and_jobs_path, "launch_all_jobs.sh"), "w") as file:
