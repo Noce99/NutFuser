@@ -19,7 +19,7 @@ ACTAUL_PATH=$(pwd)
 echo "ACTUAL POSTION = $ACTAUL_PATH"
 source /leonardo_work/IscrC_SSNeRF/NutFuser/bin/activate
 
-cd /leonardo_work/IscrC_SSNeRF/NutFuser/src/neural_networks/tf++
+cd /leonardo_work/IscrC_SSNeRF/NutFuser/src/neural_networks/tfpp
 
 export OMP_NUM_THREADS=20  # Limits pytorch to spawn at most num cpus cores threads
 export OPENBLAS_NUM_THREADS=1  # Shuts off numpy multithreading, to avoid threads spawning other threads.

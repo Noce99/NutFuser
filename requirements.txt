@@ -48,6 +48,7 @@ pyasn1==0.5.1
 pyasn1-modules==0.3.0
 pyelftools==0.30
 pygame==2.5.2
+pynvml
 pyparsing==3.1.1
 python-dateutil==2.9.0.post0
 python-tr==0.1.2

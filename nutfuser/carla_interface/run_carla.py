@@ -41,8 +41,8 @@ def check_integrity_of_carla_path(args):
     carlaUE4_path = os.path.join(carlaUE4_folder, "CarlaUE4-Linux-Shipping")
     return egg_file_path, carlaUE4_path
 
-def launch_carla_server_saifly_and_wait_till_its_up(rpc_port, carla_server_pid, carlaUE4_path, logs_path):
-    def start_up_carla_server(rpc_port, carla_server_pid, carlaUE4_path, logs_path):
+def launch_carla_server_saifly_and_wait_till_its_up(rpc_port, carla_server_pid, carlaUE4_path, logs_path, how_many_seconds_to_wait):
+    def start_up_carla_server(rpc_port, carla_server_pid, carlaUE4_path, logs_path, how_many_seconds_to_wait):
         with open(logs_path, 'r+') as logs_file:
             carla_process = subprocess.Popen(
                 ["/usr/bin/stdbuf", "-o0", carlaUE4_path, "-RenderOffScreen", "-nosound", f"-carla-rpc-port={rpc_port}"],
@@ -62,11 +62,12 @@ def launch_carla_server_saifly_and_wait_till_its_up(rpc_port, carla_server_pid, 
             if return_code is not None:
                 # The Carla process died before starting up!
                 exit()
-        print("Seems that Carla server started, I will wait 100 seconds for checking its stability!")
+        print(f"Seems that Carla server started, I will wait {how_many_seconds_to_wait} seconds for checking its stability!")
         # The Carla process is up, we will wait 100 seconds just to be sure!
-        for i in tqdm(range(100)):
+        for i in tqdm(range(how_many_seconds_to_wait)):
             # print("It's 10!")
             time.sleep(1)
+
     if not os.path.isdir(os.path.dirname(logs_path)):
         try:
             os.mkdir(os.path.dirname(logs_path))
@@ -77,7 +78,7 @@ def launch_carla_server_saifly_and_wait_till_its_up(rpc_port, carla_server_pid, 
     with open(logs_path, 'w') as _:
         pass
     
-    check_carla_process = multiprocessing.Process(target=start_up_carla_server, args=(rpc_port, carla_server_pid, carlaUE4_path, logs_path))
+    check_carla_process = multiprocessing.Process(target=start_up_carla_server, args=(rpc_port, carla_server_pid, carlaUE4_path, logs_path, how_many_seconds_to_wait))
     check_carla_process.start()
     # Let's wait till Carla Server is Up!
     while True:

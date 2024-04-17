@@ -3,6 +3,10 @@ import numpy as np
 import math
 import cv2
 import os
+from tqdm import tqdm
+from datetime import datetime
+from pynvml import *
+
 
 def color_error_string(string):
     return colored(string, "red", attrs=["bold"]) # , "blink"
@@ -218,3 +222,54 @@ def check_dataset_folder(dataset_path):
         except:
             raise Exception(color_error_string(f"Some strange frame name inside '{os.path.join(dataset_path, folder)}'\n[{all_frames}]"))
     return camera_indexes, max_index
+
+import time
+
+def create_validation_video(folders_path):
+    for folder in os.listdir(folders_path):
+        full_folder_path = os.path.join(folders_path, folder)
+        if not os.path.isdir(full_folder_path):
+            continue
+        all_frames = os.listdir(full_folder_path)
+        int_all_frames = [int(element[:-4]) for element in all_frames]
+        int_all_frames.sort()
+        example_of_frame = cv2.imread(os.path.join(full_folder_path, all_frames[0]))
+        exctention = all_frames[0][-4:]
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+        video = cv2.VideoWriter(os.path.join(folders_path, f"{folder}.mp4"), fourcc, 15, (example_of_frame.shape[1], example_of_frame.shape[0]))
+        for frame in tqdm(int_all_frames, desc=folder):
+            img = cv2.imread(os.path.join(full_folder_path, f"{frame}{exctention}"))
+            video.write(img)
+        video.release()
+
+def print_nvidia_gpu_status_on_log_file(log_file, delay_in_seconds):
+    with open(log_file, 'w') as log:
+        nvmlInit()
+        log.write(f"Driver Version: {nvmlSystemGetDriverVersion()}\n")
+        deviceCount = nvmlDeviceGetCount()
+        log.write(f"I found out {deviceCount} GPUs:\n")
+        gpus = []
+        for i in range(deviceCount):
+            gpus.append(nvmlDeviceGetHandleByIndex(i))
+            log.write(f"\tDevice {i} : {nvmlDeviceGetName(gpus[-1])}\n")
+        used_total = {i:0 for i in range(len(gpus))}
+        total_total = {i:0 for i in range(len(gpus))}
+        free_total = {i:0 for i in range(len(gpus))}
+        while True:
+            for i in range(100):
+                for i, gpu in enumerate(gpus):
+                    info = nvmlDeviceGetMemoryInfo(gpu)
+                    used_total[i] += info.used/10**9
+                    total_total[i] += info.total/10**9
+                    free_total[i] += info.free/10**9
+                time.sleep(delay_in_seconds/100)
+            for i, _ in enumerate(gpus):
+                used_total[i] /= 100
+                total_total[i] /= 100
+                free_total[i] /= 100
+            now = datetime.now()
+            current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
+            log.write(f"{current_time}:\n")
+            for i, _ in enumerate(gpus):
+                log.write(f"\t{used_total[i]:.2f} GB / {total_total[i]:.2f} GB [free: {free_total[i]:.2f} GB]\n")
+                log.flush()

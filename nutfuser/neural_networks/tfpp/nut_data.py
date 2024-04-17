@@ -218,10 +218,10 @@ class backbone_dataset(Dataset):
             for data_folder in self.folders_that_should_be_there:
                 data_name, data_extension = data_folder
                 if data_name[:-2] == "optical_flow":
-                    data[data_name] = cv2.imread(os.path.join(self.dataset_path, path, data_name, f"{id}{data_extension}"), cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
+                    data[data_name] = cv2.imread(os.path.join(path, data_name, f"{id}{data_extension}"), cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
                     data[data_name] = data[data_name].astype(np.float32)
                 else:
-                    data[data_name] = cv2.imread(os.path.join(self.dataset_path, path, data_name, f"{id}{data_extension}"))
+                    data[data_name] = cv2.imread(os.path.join(path, data_name, f"{id}{data_extension}"))
             if data_should_be_in_cache:
                 data_compressed = {}
                 for data_folder in self.folders_that_should_be_there:

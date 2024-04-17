@@ -8,6 +8,7 @@ import psutil
 import signal
 import time
 from tqdm import tqdm
+import multiprocessing
 import torch
 
 from nutfuser import utils
@@ -24,13 +25,6 @@ def get_arguments():
     argparser.add_argument(
         "--dataset_validation",
         help="Where to take the data for validation!",
-        required=False,
-        default=os.path.join(pathlib.Path(__file__).parent.resolve(), "datasets"),
-        type=str
-    )
-    argparser.add_argument(
-        "--weight",
-        help="Where to take the pretrained weights!",
         required=False,
         default=None,
         type=str
@@ -61,6 +55,8 @@ def get_arguments():
     )
     args = argparser.parse_args()
     # THERE I CHECK THE ARGUMENTS
+    if args.dataset_validation is None:
+        args.dataset_validation = args.dataset_train
     if args.dataset_train == args.dataset_validation:
         print(utils.color_info_string(
             "WARNING:"
@@ -68,7 +64,7 @@ def get_arguments():
         utils.color_error_string(
             "The training and validation set are the same!"
         ))
-    if args.just_backbone is False and args.weight is None:
+    if args.just_backbone is False and args.weights_path is None:
         raise  utils.NutException(utils.color_error_string(
             "You cannot train on the all network (not just the backbone) without giving some weights.\n"+
             "The whole trainign process is composed firstly by a backbone training of 30 epochs and secondly"+
@@ -79,14 +75,15 @@ def get_arguments():
     if not os.path.isdir(args.dataset_validation):
         raise  utils.NutException(utils.color_error_string(
             f"The folder '{args.dataset_validation}' does not exist!"))
-    if args.weight is not None and not os.path.isfile(args.weight):
+    if args.weights_path is not None and not os.path.isfile(args.weights_path):
         raise  utils.NutException(utils.color_error_string(
-            f"The file '{args.weight}' does not exist!"))
+            f"The file '{args.weights_path}' does not exist!"))
     # THERE I PROPERLY CHECK THAT THE DATASETFOLDERS ARE GOOD BUILTED
     for folder in tqdm(os.listdir(args.dataset_train)):
         folder_path = os.path.join(args.dataset_train, folder)
         if os.path.isdir(folder_path):
             utils.check_dataset_folder(folder_path)
+    
     if args.dataset_validation != args.dataset_train:
         for folder in tqdm(os.listdir(args.dataset_validation)):
             folder_path = os.path.join(args.dataset_validation, folder)
@@ -108,8 +105,8 @@ if __name__=="__main__":
     print(tabulate(a_table, headers=a_table_head, tablefmt="grid"))
 
     nutfuser_path = pathlib.Path(__file__).parent.resolve()
-    shell_train_path = os.path.join(nutfuser_path, "nutfuser", "neural_networks", "tf++", "shell_train.sh")
-    train_script_path = os.path.join(nutfuser_path, "nutfuser", "neural_networks", "tf++", "train.py")
+    shell_train_path = os.path.join(nutfuser_path, "nutfuser", "neural_networks", "tfpp", "shell_train.sh")
+    train_script_path = os.path.join(nutfuser_path, "nutfuser", "neural_networks", "tfpp", "train.py")
     train_logs_folder = os.path.join(nutfuser_path, "train_logs")
     venv_to_source_path = os.path.join(nutfuser_path, "bin", "activate")
 
@@ -122,14 +119,9 @@ if __name__=="__main__":
         os.mkdir(os.path.join(train_logs_folder, "nvidia_log"))
     nvidia_log = os.path.join(train_logs_folder, "nvidia_log", f"{current_time}")
     
-    with open(nvidia_log, 'w') as logs_file:
-        nvidia_process = subprocess.Popen(
-                    ["nvidia-smi", "--loop=20"],
-                    universal_newlines=True,
-                    stdout=logs_file,
-                    stderr=logs_file,
-                )
-        
+    my_nvidia_demon = multiprocessing.Process(target=utils.print_nvidia_gpu_status_on_log_file, args=(nvidia_log, 20))
+    my_nvidia_demon.start()
+
     if not os.path.isdir(os.path.join(train_logs_folder, "output_log")):
         os.mkdir(os.path.join(train_logs_folder, "output_log"))
     output_log = os.path.join(train_logs_folder, "output_log", f"{current_time}")
@@ -161,7 +153,7 @@ if __name__=="__main__":
                 )
     
     train_pid = train_process.pid
-    nvidia_pid = nvidia_process.pid
+    nvidia_pid = my_nvidia_demon.pid
 
     print("Waiting 10 seconds that the training process starts!")
     for i in range(10):
@@ -179,19 +171,34 @@ if __name__=="__main__":
             for el in child:
                 children_pids.append(el.pid)
 
+    print(f"Output Logs: {output_log}")
+    print(f"Nvidia Logs: {nvidia_log}")
     print(f"Ctrl-C For closing the Training!")
 
+    train_process = psutil.Process(train_pid)
     try:
         while True:
-            if not psutil.pid_exists(train_pid):
+            if train_process.status() in [psutil.STATUS_ZOMBIE, psutil.STATUS_STOPPED]:
                 break
     except KeyboardInterrupt:
         pass
 
     for pid in children_pids:
-        os.kill(pid, signal.SIGKILL)
-    os.kill(torch_run_pid, signal.SIGKILL)
-    os.kill(train_pid, signal.SIGKILL)
-    os.kill(nvidia_pid, signal.SIGKILL)
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    try:
+        os.kill(torch_run_pid, signal.SIGKILL)
+    except ProcessLookupError:
+            pass
+    try:
+        os.kill(train_pid, signal.SIGKILL)
+    except ProcessLookupError:
+            pass
+    try:
+        os.kill(nvidia_pid, signal.SIGKILL)
+    except ProcessLookupError:
+            pass
     print()
     print("Killed Everything!")

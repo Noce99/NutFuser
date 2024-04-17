@@ -601,7 +601,7 @@ def main():
         scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,
                                                          milestones,
                                                          gamma=config.multi_step_lr_decay,
-                                                         verbose=True)
+                                                         verbose=False)
     scaler = torch.cuda.amp.GradScaler(enabled=bool(config.use_amp))
     if not args.load_file is None and not config.freeze_backbone:
         if args.continue_epoch:
@@ -792,7 +792,7 @@ class Engine(object):
         self.optimizer.zero_grad(set_to_none=False)
 
         # Train loop
-        for i, data in enumerate(tqdm(self.dataloader_train, disable=self.rank != 0)):
+        for i, data in enumerate(tqdm(self.dataloader_train, disable=self.rank != 0, desc=f"TRAIN EPOCH {self.cur_epoch}")):
 
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=bool(self.config.use_amp)):
                 losses = self.load_data_compute_loss(data, validation=False)
@@ -889,8 +889,8 @@ class Engine(object):
 
             if self.config.use_flow:
                 flow_comparison = np.zeros((pred_flow.shape[0]*2, pred_flow.shape[1], 3), dtype=np.uint8)
-                print(f"PRED\t0 : [{np.min(pred_flow[:, :, 0])}; {np.max(pred_flow[:, :, 0])}] 1 : [{np.min(pred_flow[:, :, 1])}; {np.max(pred_flow[:, :, 1])}]")
-                print(f"LABEL\t0 : [{np.min(data['optical_flow_0'][:, :, 0])}; {np.max(data['optical_flow_0'][:, :, 0])}] 1 : [{np.min(data['optical_flow_0'][:, :, 1])}; {np.max(data['optical_flow_0'][:, :, 1])}]")
+                # print(f"PRED\t0 : [{np.min(pred_flow[:, :, 0])}; {np.max(pred_flow[:, :, 0])}] 1 : [{np.min(pred_flow[:, :, 1])}; {np.max(pred_flow[:, :, 1])}]")
+                # print(f"LABEL\t0 : [{np.min(data['optical_flow_0'][:, :, 0])}; {np.max(data['optical_flow_0'][:, :, 0])}] 1 : [{np.min(data['optical_flow_0'][:, :, 1])}; {np.max(data['optical_flow_0'][:, :, 1])}]")
                 flow_comparison[0:pred_flow.shape[0], :, :] = nut_utils.optical_flow_to_human(pred_flow)
                 flow_comparison[pred_flow.shape[0]:, :, :] = nut_utils.optical_flow_to_human(data["optical_flow_0"][:, :, :2])
 
@@ -911,7 +911,7 @@ class Engine(object):
         detailed_val_losses_epoch = defaultdict(float)
 
         # Evaluation loop loop
-        for data in tqdm(self.dataloader_val, disable=self.rank != 0):
+        for data in tqdm(self.dataloader_val, disable=self.rank != 0, desc="EVAL"):
             losses = self.load_data_compute_loss(data, validation=True)
 
             loss = torch.zeros(1, dtype=torch.float32, device=self.device)

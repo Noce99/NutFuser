@@ -81,6 +81,13 @@ def get_arguments():
         type=int
     )
     argparser.add_argument(
+        '--wait_carla_for',
+        help='How many seconds wait for Carla!',
+        required=False,
+        default=100,
+        type=int
+    )
+    argparser.add_argument(
         '--dataset_path',
         help='Where to save the data!',
         required=False,
@@ -132,6 +139,7 @@ def run_all(args):
             carla_server_pid=carla_server_pid,
             carlaUE4_path=carlaUE4_path,
             logs_path=carla_log_path,
+            how_many_seconds_to_wait=args.wait_carla_for
         )
 
     pids_to_be_killed.append(carla_server_pid.value)

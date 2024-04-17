@@ -6,7 +6,7 @@ _out/
 include/
 logs/
 nutfuser/neural_networks/train_logs/
-nutfuser/neural_networks/tf++/nut_tmp/*
+nutfuser/neural_networks/tfpp/nut_tmp/*
 nutfuser/evaluation/maps_from_top/*
 datasets/
 nut_tmp/
