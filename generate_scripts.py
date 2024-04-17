@@ -11,17 +11,17 @@ Job = collections.namedtuple("Job", ["id", "town", "port", "tm_port"])
 
 if __name__ == "__main__":
 
-    # ASK where to put the scripts_and_jobs FOLDER
+    # ASK where to put the data_jobs FOLDER
     done = False
     while not done:
         try:
-            possible_path = input("Where to save the scripts_and_jobs FOLDER? : ")
+            possible_path = input("Where to save the data_jobs FOLDER? : ")
             if not os.path.isdir(possible_path):
                 print(utils.color_error_string(f"Cannot find '{possible_path}'!"))
                 continue
-            script_and_jobs_path = os.path.join(possible_path, "scripts_and_jobs")
+            script_and_jobs_path = os.path.join(possible_path, "data_jobs")
             if os.path.isdir(script_and_jobs_path):
-                print(utils.color_error_string(f"'scripts_and_jobs' folder already present in '{possible_path}'!"))
+                print(utils.color_error_string(f"'data_jobs' folder already present in '{possible_path}'!"))
                 overwrite = None
                 while overwrite not in ["yes", "no"]:
                     overwrite = input("Do you want to overwrite it? ['yes' or 'no'] : ")
@@ -93,7 +93,7 @@ if __name__ == "__main__":
     # GET NUTFUSER FOLDER
     NUTFUSER = os.path.dirname(os.path.realpath(__file__))
 
-    # POPULATING scripts_and_jobs FOLDER
+    # POPULATING data_jobs FOLDER
     """
     FROM CARLA DOCUMENTATIONS:
     terminal 1: ./CarlaUE4.sh -carla-rpc-port=4000 # simulation A
