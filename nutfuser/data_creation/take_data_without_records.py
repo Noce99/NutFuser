@@ -525,6 +525,37 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
                     frame_waypoints_not_rotated[frame_id, i-1] = vehicle_origin_carla_coordinate_waypoint
                     break
     np.save(os.path.join(os.path.join(where_to_save), "frame_waypoints.npy"), frame_waypoints)
+    # NEXT TARGETPOINT of 30/50 m distance
+    frame_targetpoints = np.zeros((len(frame_carla_positions_array), 3))
+    frame_targetpoints_not_rotated = np.zeros((len(frame_carla_positions_array), 3))
+    for frame_id in tqdm(range(len(frame_carla_positions_array)), desc=utils.color_info_string("Saving Targetpoints...")):
+        all_id = frame_id * config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
+        distance = 0
+        old_distance = 0
+        while True:
+            all_id += 1
+            old_distance = distance
+            distance += math.sqrt((all_carla_positions_array[all_id, 0] - all_carla_positions_array[all_id-1, 0])**2
+                                    + (all_carla_positions_array[all_id, 1] - all_carla_positions_array[all_id-1, 1])**2)
+            # print(distance)
+            if distance > config.DISTANCE_BETWEEN_TARGETPOINTS:
+                big_delta_distance = distance - old_distance
+                small_delta_distance = config.DISTANCE_BETWEEN_TARGETPOINTS - old_distance
+                percentage = small_delta_distance / big_delta_distance
+                point_x = all_carla_positions_array[all_id-1, 0] + percentage * (all_carla_positions_array[all_id, 0] - all_carla_positions_array[all_id-1, 0])
+                point_y = all_carla_positions_array[all_id-1, 1] + percentage * (all_carla_positions_array[all_id, 1] - all_carla_positions_array[all_id-1, 1])
+                point_z = all_carla_positions_array[all_id-1, 2] + percentage * (all_carla_positions_array[all_id, 2] - all_carla_positions_array[all_id-1, 2])
+                carla_coordinate_waypoint = np.array([point_x, point_y, point_z])
+                vehicle_origin_carla_coordinate_waypoint = carla_coordinate_waypoint - frame_carla_positions_array[frame_id]
+                theta = -frame_compass_array[frame_id] + math.pi
+                rotation_matrix = np.array([[np.cos(theta),     -np.sin(theta),     0],
+                                            [np.sin(theta),     np.cos(theta),      0],
+                                            [0,                 0,                  1]])
+                vehicle_waypoint = rotation_matrix@vehicle_origin_carla_coordinate_waypoint
+                frame_targetpoints[frame_id] = vehicle_waypoint
+                frame_targetpoints_not_rotated[frame_id] = vehicle_origin_carla_coordinate_waypoint
+                break
+    np.save(os.path.join(os.path.join(where_to_save), "frame_targetpoints.npy"), frame_targetpoints)
     # SPEEDS
     previous_speeds = [] # the speed given as input to the model
     next_speeds = [] # the ground trouth speed that the model have to predict

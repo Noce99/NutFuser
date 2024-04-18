@@ -37,8 +37,8 @@ def get_arguments():
     )
     argparser.add_argument(
         '--town',
-        default=15,
-        help='Witch town to select (default: 15)',
+        default=10,
+        help='Witch town to select (default: 10)',
         type=int
     )
     argparser.add_argument(
@@ -61,35 +61,35 @@ def get_arguments():
     )
     argparser.add_argument(
         '--num_of_vehicle',
-        help='Number of Vehicle to spawn!',
+        help='Number of Vehicle to spawn! (default: 30)',
         required=False,
         default=30,
         type=int
     )
     argparser.add_argument(
         '--num_of_walkers',
-        help='Number of Walkers to spawn!',
+        help='Number of Walkers to spawn! (default: 30)',
         required=False,
         default=30,
         type=int
     )
     argparser.add_argument(
         '--num_of_frames',
-        help='Number of Frames to take!',
+        help='Number of Frames to take! (default: 10)',
         required=False,
         default=10,
         type=int
     )
     argparser.add_argument(
         '--wait_carla_for',
-        help='How many seconds wait for Carla!',
+        help='How many seconds wait for Carla! (default: 100)',
         required=False,
         default=100,
         type=int
     )
     argparser.add_argument(
         '--dataset_path',
-        help='Where to save the data!',
+        help=f'Where to save the data! (default: {os.path.join(pathlib.Path(__file__).parent.resolve(), "datasets")})',
         required=False,
         default=os.path.join(pathlib.Path(__file__).parent.resolve(), "datasets"),
         type=str
