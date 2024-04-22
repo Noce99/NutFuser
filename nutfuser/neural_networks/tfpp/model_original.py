@@ -222,11 +222,6 @@ class LidarCenterNet(nn.Module):
         self.extra_sensor_encoder_without_command = nn.Sequential(nn.Linear(1, 128), nn.ReLU(inplace=True),
                                                           nn.Linear(128, extra_sensor_channels), nn.ReLU(inplace=True))
         
-        print(f"his_weights = {self.extra_sensor_encoder[0].weight.shape}")
-        print(f"his_bias    = {self.extra_sensor_encoder[0].bias.shape}")
-        print(f"my_weights  = {self.extra_sensor_encoder_without_command[0].weight.shape}")
-        print(f"my_bias     = {self.extra_sensor_encoder_without_command[0].bias.shape}")
-
         new_weights = nn.Parameter(self.extra_sensor_encoder[0].weight.data.clone().detach())[:, 0][:, None]
         self.extra_sensor_encoder_without_command[0].weight = nn.Parameter(new_weights)
         self.extra_sensor_encoder_without_command[0].bias = nn.Parameter(self.extra_sensor_encoder[0].bias.data.clone().detach())
