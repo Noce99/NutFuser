@@ -752,7 +752,7 @@ class Engine(object):
                             target_point=target_point,
                             ego_vel=ego_vel,
                             command=command)
-
+        
         compute_loss = self.model.module.compute_loss
         losses = compute_loss(pred_wp=pred_wp,
                               pred_target_speed=pred_target_speed,

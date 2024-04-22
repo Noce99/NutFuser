@@ -18,8 +18,8 @@ import matplotlib.pyplot as plt
 
 class TransfuserBackbone(nn.Module):
     """
-      Multi-scale Fusion Transformer for image + LiDAR feature fusion
-      """
+    Multi-scale Fusion Transformer for image + LiDAR feature fusion
+    """
 
     def __init__(self, config):
         super().__init__()
