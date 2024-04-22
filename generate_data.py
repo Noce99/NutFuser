@@ -104,6 +104,11 @@ def get_arguments():
         help='Set if we want to add left and right lateral cameras!',
         action='store_true'
     )
+    argparser.add_argument(
+        '--original_transfuser_camera',
+        help=f'Set if we want to create rgb data with the original transfuser parameters! {utils.color_error_string("NOT IMPLEMENTED")}',
+        action='store_true'
+    )
     args = argparser.parse_args()
     if args.town not in config.TOWN_DICT:
         error = f"Invalid Town Index! [{args.town}]\n" + \
