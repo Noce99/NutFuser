@@ -219,6 +219,17 @@ class LidarCenterNet(nn.Module):
           extra_size += 6
         self.extra_sensor_encoder = nn.Sequential(nn.Linear(extra_size, 128), nn.ReLU(inplace=True),
                                                   nn.Linear(128, extra_sensor_channels), nn.ReLU(inplace=True))
+        self.extra_sensor_encoder_without_command = nn.Sequential(nn.Linear(1, 128), nn.ReLU(inplace=True),
+                                                          nn.Linear(128, extra_sensor_channels), nn.ReLU(inplace=True))
+        
+        print(f"his_weights = {self.extra_sensor_encoder[0].weight.shape}")
+        print(f"his_bias    = {self.extra_sensor_encoder[0].bias.shape}")
+        print(f"my_weights  = {self.extra_sensor_encoder_without_command[0].weight.shape}")
+        print(f"my_bias     = {self.extra_sensor_encoder_without_command[0].bias.shape}")
+
+        new_weights = nn.Parameter(self.extra_sensor_encoder[0].weight.data.clone().detach())[:, 0][:, None]
+        self.extra_sensor_encoder_without_command[0].weight = nn.Parameter(new_weights)
+        self.extra_sensor_encoder_without_command[0].bias = nn.Parameter(self.extra_sensor_encoder[0].bias.data.clone().detach())
 
     # pid controllers for waypoints
     self.turn_controller = t_u.PIDController(k_p=config.turn_kp,
@@ -310,9 +321,10 @@ class LidarCenterNet(nn.Module):
         if self.config.use_velocity:
           extra_sensors.append(self.velocity_normalization(ego_vel))
         if self.config.use_discrete_command:
-          extra_sensors.append(command)
+          # extra_sensors.append(command)
+          pass
         extra_sensors = torch.cat(extra_sensors, axis=1)
-        extra_sensors = self.extra_sensor_encoder(extra_sensors)
+        extra_sensors = self.extra_sensor_encoder_without_command(extra_sensors)
 
         if self.config.transformer_decoder_join:
           extra_sensors = extra_sensors + self.extra_sensor_pos_embed.repeat(bs, 1)
