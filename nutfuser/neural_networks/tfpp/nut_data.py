@@ -99,7 +99,7 @@ class backbone_dataset(Dataset):
                             [(f"optical_flow_{i}", ".png") for i in camera_indexes] +\
                             [(f"semantic_{i}", ".png") for i in camera_indexes] +\
                             [("bev_semantic", ".png"),      ("bev_lidar", ".png")]
-
+        
         def check_that_all_sensors_have_the_same_ammount_of_frame(data_folder_path):
             min_number_of_frames = None
             for data_subfolder in self.folders_that_should_be_there:
@@ -204,6 +204,28 @@ class backbone_dataset(Dataset):
                     self.data_should_be_in_cache[index] = False
                 self.data_already_in_cache[index] = False
                 index += 1
+        
+        # Let's read:
+        # - input speed (input of the model)
+        # - target point (input of the model)
+        # - target speed (output of the model)
+        # - waypoints data (output of the model)
+
+        self.targetpoints = {}
+        self.waypoints = {}
+        self.previous_speeds = {}
+        self.next_speeds = {}
+
+        for data_folder in self.data_folders:
+            self.targetpoints_path = os.path.join(self.dataset_path, data_folder.path, "frame_targetpoints.npy")
+            self.waypoints_path = os.path.join(self.dataset_path, data_folder.path, "frame_waypoints.npy")
+            self.previous_speeds_path = os.path.join(self.dataset_path, data_folder.path, "previous_speeds.npy")
+            self.next_speeds_path = os.path.join(self.dataset_path, data_folder.path, "next_speeds.npy")
+
+            self.targetpoints[data_folder.path] = np.load(self.targetpoints_path)
+            self.waypoints[data_folder.path] = np.load(self.waypoints_path)
+            self.previous_speeds[data_folder.path] = np.load(self.previous_speeds_path)
+            self.next_speeds[data_folder.path] = np.load(self.next_speeds_path)
 
     def __len__(self):
         return self.total_number_of_frames
@@ -222,6 +244,10 @@ class backbone_dataset(Dataset):
                     data[data_name] = data[data_name].astype(np.float32)
                 else:
                     data[data_name] = cv2.imread(os.path.join(path, data_name, f"{id}{data_extension}"))
+            data["input_speed"] = self.previous_speeds[self.data_path[idx]][id]
+            data["target_speed"] = self.next_speeds[self.data_path[idx]][id]
+            data["waypoints"] = self.waypoints[self.data_path[idx]][id]
+            data["targetpoint"] = self.targetpoints[self.data_path[idx]][id]
             if data_should_be_in_cache:
                 data_compressed = {}
                 for data_folder in self.folders_that_should_be_there:
