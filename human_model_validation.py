@@ -93,6 +93,7 @@ if __name__=="__main__":
     else:
         model = LidarCenterNet(a_config_file)
     model.cuda()
+    model.eval()
 
     try:
         model.load_state_dict(torch.load(args.weights_path), strict=False)
@@ -130,9 +131,6 @@ if __name__=="__main__":
         os.mkdir(flow_path)
 
     for i, data in enumerate(tqdm(dataloader)):
-        target_point = None
-        command = None
-        ego_vel = None
 
         rgb_a = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
         rgb_b = data["rgb_B_0"].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
@@ -146,7 +144,19 @@ if __name__=="__main__":
         lidar = data["bev_lidar"][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
         flow_label = (data["optical_flow_0"][:, :, :, :2] / 2**15 - 1).permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
 
-        predictions = model(      rgb=rgb,
+        if args.just_backbone:
+            target_point = None
+            command = None
+            ego_vel = None
+        else:
+            target_point = data["targetpoint"].to(device, dtype=torch.float32)
+            if target_point.shape[1] == 3:
+                target_point = target_point[:, :-1]
+            command = None
+            ego_vel = data["target_speed"].to(device, dtype=torch.float32)
+            ego_vel = ego_vel[None, :]
+
+        predictions = model(    rgb=rgb,
                                 lidar_bev=lidar,
                                 target_point=target_point,
                                 ego_vel=ego_vel,
