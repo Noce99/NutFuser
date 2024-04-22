@@ -6,6 +6,7 @@ import os
 from tqdm import tqdm
 from datetime import datetime
 from pynvml import *
+from nutfuser.raft_flow_colormap import flow_to_image
 
 
 def color_error_string(string):
@@ -75,6 +76,9 @@ def optical_flow_to_human(flow):
     flow = (flow - 2**15) / 64.0
     H = flow.shape[0]
     W = flow.shape[1]
+    
+    output = flow_to_image(flow, clip_flow=60)
+    """
     flow[:, :, 0] /= H * 0.5
     flow[:, :, 1] /= W * 0.5
     output = np.zeros((H, W, 3), dtype=np.float32)
@@ -97,6 +101,7 @@ def optical_flow_to_human(flow):
     output[H_60 == 4] = np.stack([X, np.zeros_like(C), C], axis = -1)[H_60 == 4]
     output[H_60 == 5] = np.stack([C, np.zeros_like(C), X], axis = -1)[H_60 == 5]
     output[H_60 >= 6] = np.stack([np.ones_like(C), np.ones_like(C), np.ones_like(C)], axis = -1)[H_60 >= 6]
+    """
 
     output *= 255
     # output = output.astype(np.uint8)
@@ -239,6 +244,38 @@ def create_validation_video(folders_path):
         video = cv2.VideoWriter(os.path.join(folders_path, f"{folder}.mp4"), fourcc, 15, (example_of_frame.shape[1], example_of_frame.shape[0]))
         for frame in tqdm(int_all_frames, desc=folder):
             img = cv2.imread(os.path.join(full_folder_path, f"{frame}{exctention}"))
+            video.write(img)
+        video.release()
+
+def create_compariso_validation_video(folders_path_A, folders_path_B):
+    folders_in_A = os.listdir(folders_path_A)
+    folders_in_B = os.listdir(folders_path_B)
+    folders = [element for element in folders_in_A if element in folders_in_B]
+    for folder in folders:
+        full_folder_path_A = os.path.join(folders_path_A, folder)
+        full_folder_path_B = os.path.join(folders_path_B, folder)
+        if not os.path.isdir(full_folder_path_A) or not os.path.isdir(full_folder_path_B):
+            continue
+        all_frames_A = os.listdir(full_folder_path_A)
+        all_frames_B = os.listdir(full_folder_path_B)
+        int_all_frames_A = [int(element[:-4]) for element in all_frames_A]
+        int_all_frames_B = [int(element[:-4]) for element in all_frames_B]
+        if int_all_frames_A != int_all_frames_B:
+            print(color_error_string("Frames in 'full_folder_path_A' and 'full_folder_path_B' do not match!"))
+            exit()
+        int_all_frames_A.sort()
+        int_all_frames = int_all_frames_A
+        del int_all_frames_B
+        example_of_frame = cv2.imread(os.path.join(full_folder_path_A, all_frames_A[0]))
+        exctention = all_frames_A[0][-4:]
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
+        video = cv2.VideoWriter(os.path.join(folders_path_A, f"comparison_{folder}.mp4"), fourcc, 15, (example_of_frame.shape[1], int((example_of_frame.shape[0]/2)*3)))
+        for frame in tqdm(int_all_frames, desc=f"comparison_{folder}"):
+            img_A = cv2.imread(os.path.join(full_folder_path_A, f"{frame}{exctention}"))
+            img_B = cv2.imread(os.path.join(full_folder_path_B, f"{frame}{exctention}"))
+            img = np.zeros(shape=(int((img_A.shape[0]/2)*3), img_A.shape[1], img_A.shape[2]), dtype=img_A.dtype)
+            img[:img_A.shape[0], :] = img_A
+            img[img_A.shape[0]//2:, :] = img_B
             video.write(img)
         video.release()
 

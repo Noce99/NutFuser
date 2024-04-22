@@ -4,6 +4,7 @@ import os
 import cv2
 import numpy as np
 import argparse
+import math
 
 from nutfuser import config
 from nutfuser import utils
@@ -90,7 +91,7 @@ def print_section(screen, number, dataset_path):
         y = SIDE_SPACE_SIZE + config.BEV_IMAGE_H
         rect.center = x, y
         screen.blit(img, rect)
-        # SEMANTIC
+        # BEV SEMANTIC
         folder_path = os.path.join(dataset_path, "bev_semantic")
         img_path = os.path.join(folder_path, f"{FRAME}.png")
         my_array = cv2.imread(img_path)
@@ -113,7 +114,19 @@ def print_section(screen, number, dataset_path):
                 xx = x - frame_waypoints[FRAME, i, 0]*config.BEV_IMAGE_W/config.BEV_SQUARE_SIDE_IN_M * 2
                 yy = y - frame_waypoints[FRAME, i, 1]*config.BEV_IMAGE_W/config.BEV_SQUARE_SIDE_IN_M * 2
                 pygame.draw.circle(screen, (255, 0, 0), (xx, yy), 4)
-
+        # TARGETPOINTS
+        frame_targetpoints_path = os.path.join(dataset_path, "frame_targetpoints.npy")
+        if os.path.isfile(frame_targetpoints_path):
+            frame_targetpoints = np.load(frame_targetpoints_path)
+            xx = x - frame_targetpoints[FRAME, 0]*config.BEV_IMAGE_W/config.BEV_SQUARE_SIDE_IN_M * 2
+            yy = y - frame_targetpoints[FRAME, 1]*config.BEV_IMAGE_W/config.BEV_SQUARE_SIDE_IN_M * 2
+            pygame.draw.circle(screen, (0, 255, 0), (xx, yy), 6)
+            font = pygame.font.Font("freesansbold.ttf", 32)
+            distance_of_targetpoint = math.sqrt(frame_targetpoints[FRAME, 0]**2 + frame_targetpoints[FRAME, 1]**2)
+            text = font.render(f"targetpoint distance = {distance_of_targetpoint:.2f}", True, (0, 255, 0))
+            textRect = text.get_rect()
+            textRect.center = (x, y + config.BEV_IMAGE_H)
+            screen.blit(text, textRect)
     elif number == 6:
         # ALL GPS
         all_gps_lat_lon_path = os.path.join(dataset_path, "all_gps_positions.npy")

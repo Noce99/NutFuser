@@ -16,6 +16,7 @@ from nutfuser import config
 
 sys.path.append(os.path.join(pathlib.Path(__file__).parent.resolve(), "nutfuser", "neural_networks", "tfpp"))
 from nutfuser.neural_networks.tfpp.model import LidarCenterNet
+from nutfuser.neural_networks.tfpp.model_original import LidarCenterNet as LidarCenterNetOriginal
 from nutfuser.neural_networks.tfpp.config import GlobalConfig
 from nutfuser.neural_networks.tfpp.nut_data import backbone_dataset
 from nutfuser.neural_networks.tfpp.nut_utils import optical_flow_to_human
@@ -30,6 +31,11 @@ def get_arguments():
     argparser.add_argument(
         '--use_flow',
         help='Set if you want to predict also the flow!',
+        action='store_true'
+    )
+    argparser.add_argument(
+        '--original_tfpp',
+        help='Set if you are giving weights from the original tfpp!',
         action='store_true'
     )
     argparser.add_argument(
@@ -75,7 +81,17 @@ if __name__=="__main__":
     a_config_file.use_flow = args.use_flow
     if args.just_backbone:
         a_config_file.use_controller_input_prediction = 0
-    model = LidarCenterNet(a_config_file)
+    if args.original_tfpp:
+        print("Original!")
+        a_config_file.use_flow = False
+        a_config_file.num_bev_semantic_classes = 11
+        a_config_file.num_semantic_classes = 7
+        del a_config_file.detailed_loss_weights["loss_flow"]
+        a_config_file.semantic_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+        a_config_file.bev_semantic_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+        model = LidarCenterNetOriginal(a_config_file)
+    else:
+        model = LidarCenterNet(a_config_file)
     model.cuda()
 
     try:
@@ -83,6 +99,7 @@ if __name__=="__main__":
     except Exception as e:
         print(utils.color_error_string(f"Impossible to load weights located in '{args.weights_path}'"))
         print(utils.color_info_string(repr(e)))
+        exit()
 
     dataset = backbone_dataset(rank=0, dataset_path=args.data_folder, use_cache=True)
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
@@ -119,27 +136,43 @@ if __name__=="__main__":
 
         rgb_a = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
         rgb_b = data["rgb_B_0"].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
-        rgb = torch.concatenate([rgb_a, rgb_b], dim=1)
+        if args.use_flow:
+            rgb = torch.concatenate([rgb_a, rgb_b], dim=1)
+        else:
+            rgb = rgb_a
         semantic_label = F.one_hot(data["semantic_0"][:, :, :, 0].type(torch.LongTensor), 8).permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
         bev_semantic_label = F.one_hot(torch.rot90(data["bev_semantic"], 3, [1, 2])[:, :, :, 0].type(torch.LongTensor), 6).permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
         depth_label = (data["depth_0"][:, :, :, 0]/255).contiguous().to(device, dtype=torch.float32)
         lidar = data["bev_lidar"][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
         flow_label = (data["optical_flow_0"][:, :, :, :2] / 2**15 - 1).permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
 
-        pred_wp,\
-        pred_target_speed,\
-        pred_checkpoint,\
-        pred_semantic, \
-        pred_bev_semantic, \
-        pred_depth, \
-        pred_bounding_box, _, \
-        pred_wp_1, \
-        selected_path, \
-        pred_flow = model(      rgb=rgb,
+        predictions = model(      rgb=rgb,
                                 lidar_bev=lidar,
                                 target_point=target_point,
                                 ego_vel=ego_vel,
                                 command=command)
+        
+        if not args.original_tfpp:
+            pred_wp,\
+            pred_target_speed,\
+            pred_checkpoint,\
+            pred_semantic, \
+            pred_bev_semantic, \
+            pred_depth, \
+            pred_bounding_box, _, \
+            pred_wp_1, \
+            selected_path, \
+            pred_flow = predictions
+        else:
+            pred_wp,\
+            pred_target_speed,\
+            pred_checkpoint,\
+            pred_semantic, \
+            pred_bev_semantic, \
+            pred_depth, \
+            pred_bounding_box, _, \
+            pred_wp_1, \
+            selected_path = predictions
         
         pred_depth = (pred_depth[0, :, :].detach().cpu().numpy()*255).astype(np.uint8)
         pred_semantic = torch.argmax(pred_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)

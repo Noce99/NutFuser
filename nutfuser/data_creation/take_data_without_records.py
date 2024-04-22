@@ -527,8 +527,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     np.save(os.path.join(os.path.join(where_to_save), "frame_waypoints.npy"), frame_waypoints)
     # NEXT TARGETPOINT of 30/50 m distance
     frame_targetpoints = np.zeros((len(frame_carla_positions_array), 3))
-    frame_targetpoints_not_rotated = np.zeros((len(frame_carla_positions_array), 3))
-    for frame_id in tqdm(range(len(frame_carla_positions_array)), desc=utils.color_info_string("Saving Targetpoints...")):
+    def get_new_targetpoint(frame_id):
         all_id = frame_id * config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
         distance = 0
         old_distance = 0
@@ -537,7 +536,6 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             old_distance = distance
             distance += math.sqrt((all_carla_positions_array[all_id, 0] - all_carla_positions_array[all_id-1, 0])**2
                                     + (all_carla_positions_array[all_id, 1] - all_carla_positions_array[all_id-1, 1])**2)
-            # print(distance)
             if distance > config.DISTANCE_BETWEEN_TARGETPOINTS:
                 big_delta_distance = distance - old_distance
                 small_delta_distance = config.DISTANCE_BETWEEN_TARGETPOINTS - old_distance
@@ -545,16 +543,24 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
                 point_x = all_carla_positions_array[all_id-1, 0] + percentage * (all_carla_positions_array[all_id, 0] - all_carla_positions_array[all_id-1, 0])
                 point_y = all_carla_positions_array[all_id-1, 1] + percentage * (all_carla_positions_array[all_id, 1] - all_carla_positions_array[all_id-1, 1])
                 point_z = all_carla_positions_array[all_id-1, 2] + percentage * (all_carla_positions_array[all_id, 2] - all_carla_positions_array[all_id-1, 2])
-                carla_coordinate_waypoint = np.array([point_x, point_y, point_z])
-                vehicle_origin_carla_coordinate_waypoint = carla_coordinate_waypoint - frame_carla_positions_array[frame_id]
-                theta = -frame_compass_array[frame_id] + math.pi
-                rotation_matrix = np.array([[np.cos(theta),     -np.sin(theta),     0],
-                                            [np.sin(theta),     np.cos(theta),      0],
-                                            [0,                 0,                  1]])
-                vehicle_waypoint = rotation_matrix@vehicle_origin_carla_coordinate_waypoint
-                frame_targetpoints[frame_id] = vehicle_waypoint
-                frame_targetpoints_not_rotated[frame_id] = vehicle_origin_carla_coordinate_waypoint
-                break
+                carla_coordinate_targetpoint = np.array([point_x, point_y, point_z])
+                return carla_coordinate_targetpoint
+    carla_coordinate_targetpoint = None
+    for frame_id in tqdm(range(len(frame_carla_positions_array)), desc=utils.color_info_string("Saving Targetpoints...")):
+        if carla_coordinate_targetpoint is None:
+            carla_coordinate_targetpoint = get_new_targetpoint(frame_id)
+        vehicle_origin_carla_coordinate_targetpoint = carla_coordinate_targetpoint - frame_carla_positions_array[frame_id]
+        theta = -frame_compass_array[frame_id] + math.pi
+        rotation_matrix = np.array([[np.cos(theta),     -np.sin(theta),     0],
+                                    [np.sin(theta),     np.cos(theta),      0],
+                                    [0,                 0,                  1]])
+        vehicle_targetpoint = rotation_matrix@vehicle_origin_carla_coordinate_targetpoint
+        frame_targetpoints[frame_id] = vehicle_targetpoint
+        # let's check if we need to calculate the next targetpoint
+        distance_from_target_point = math.sqrt(vehicle_origin_carla_coordinate_targetpoint[0]**2 + vehicle_origin_carla_coordinate_targetpoint[1]**2)
+        print(distance_from_target_point)
+        if distance_from_target_point < config.MINIMUM_DISTANCE_FOR_NEXT_TARGETPOINT:
+            carla_coordinate_targetpoint = None
     np.save(os.path.join(os.path.join(where_to_save), "frame_targetpoints.npy"), frame_targetpoints)
     # SPEEDS
     previous_speeds = [] # the speed given as input to the model
