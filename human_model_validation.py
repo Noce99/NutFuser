@@ -102,7 +102,7 @@ if __name__=="__main__":
         print(utils.color_info_string(repr(e)))
         exit()
 
-    dataset = backbone_dataset(rank=0, dataset_path=args.data_folder, use_cache=True)
+    dataset = backbone_dataset(rank=0, dataset_path=args.data_folder)
     dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
     device = torch.device(f'cuda:{0}')
