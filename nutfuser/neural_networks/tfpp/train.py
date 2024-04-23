@@ -462,9 +462,9 @@ def main():
 
     # Data, configures config. Create before the model
 
-    train_set = backbone_dataset(rank=rank, dataset_path=args.root_dir, use_cache=True)
+    train_set = backbone_dataset(rank=rank, dataset_path=args.root_dir)
 
-    val_set = backbone_dataset(rank=rank, dataset_path=args.val_dir, use_cache=False)
+    val_set = backbone_dataset(rank=rank, dataset_path=args.val_dir)
 
     if rank == 0:
         print('Target speed weights: ', config.target_speed_weights, flush=True)
