@@ -105,8 +105,8 @@ def get_arguments():
         action='store_true'
     )
     argparser.add_argument(
-        '--original_transfuser_camera',
-        help=f'Set if we want to create rgb data with the original transfuser parameters! {utils.color_error_string("NOT IMPLEMENTED")}',
+        '--original_transfuser',
+        help=f'Set if we want to create rgb and lidar data with the original transfuser parameters!',
         action='store_true'
     )
     args = argparser.parse_args()
@@ -201,7 +201,7 @@ def run_all(args):
                                                     args=(egg_file_path, args.town, args.rpc_port, args.job_id,
                                                           ego_vehicle_found_event, finished_taking_data_event,
                                                           you_can_tick, args.num_of_frames, datasets_path,
-                                                          args.back_camera, args.lateral_cameras))
+                                                          args.back_camera, args.lateral_cameras, args.original_transfuser))
     data_creation_process.start()
     data_creation_pid.value = data_creation_process.pid
     pids_to_be_killed.append(data_creation_pid.value)
