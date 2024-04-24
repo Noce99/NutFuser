@@ -78,33 +78,7 @@ def optical_flow_to_human(flow):
     W = flow.shape[1]
     
     output = flow_to_image(flow, clip_flow=60)
-    """
-    flow[:, :, 0] /= H * 0.5
-    flow[:, :, 1] /= W * 0.5
-    output = np.zeros((H, W, 3), dtype=np.float32)
-    rad2ang = 180./np.pi
-    angle = 180. + np.arctan2(flow[:, :, 1], flow[:, :, 0]) * rad2ang
-    angle[angle < 0] += 360
-    angle = np.fmod(angle, 360.)
-    H_60 = angle / 60.
-    norm = np.sqrt(np.power(flow[:, :, 0], 2) + np.power(flow[:, :, 1], 2))
-    raw_intensity = 1/np.log(0.1 + 0.999) * np.log(norm + 0.999)
-    raw_intensity[raw_intensity < 0.] = 0.
-    raw_intensity[raw_intensity > 1.] = 1.
-    C = raw_intensity
-    X = raw_intensity * (np.ones_like(H_60) - np.abs(np.fmod(H_60, 2,) - np.ones_like(H_60)))
-    H_60 = H_60.astype(int)
-    output[H_60 == 0] = np.stack([C, X, np.zeros_like(C)], axis = -1)[H_60 == 0]
-    output[H_60 == 1] = np.stack([X, C, np.zeros_like(C)], axis = -1)[H_60 == 1]
-    output[H_60 == 2] = np.stack([np.zeros_like(C), C, X], axis = -1)[H_60 == 2]
-    output[H_60 == 3] = np.stack([np.zeros_like(C), X, C], axis = -1)[H_60 == 3]
-    output[H_60 == 4] = np.stack([X, np.zeros_like(C), C], axis = -1)[H_60 == 4]
-    output[H_60 == 5] = np.stack([C, np.zeros_like(C), X], axis = -1)[H_60 == 5]
-    output[H_60 >= 6] = np.stack([np.ones_like(C), np.ones_like(C), np.ones_like(C)], axis = -1)[H_60 >= 6]
-    """
-
     output *= 255
-    # output = output.astype(np.uint8)
     return output
 
 def optical_flow_to_human_with_path(optical_flow_path):
@@ -310,3 +284,26 @@ def print_nvidia_gpu_status_on_log_file(log_file, delay_in_seconds):
             for i, _ in enumerate(gpus):
                 log.write(f"\t{used_total[i]:.2f} GB / {total_total[i]:.2f} GB [free: {free_total[i]:.2f} GB]\n")
                 log.flush()
+
+def lidar_to_histogram_features_tfpp_original(lidar):
+    MAX_HIST_POINTS = 5
+    def splat_points(point_cloud):
+        # 256 x 256 grid
+        xbins = np.linspace(-32, 32, 256+1)
+        ybins = np.linspace(-32, 32, 256+1)
+        hist = np.histogramdd(point_cloud[:, :2], bins=(xbins, ybins))[0]
+        hist[hist > 5] = 5
+        overhead_splat = hist / 5
+        # The transpose here is an efficient axis swap.
+        # Comes from the fact that carla is x front, y right, whereas the image is y front, x right
+        # (x height channel, y width channel)
+        return overhead_splat.T
+    # Remove points above the vehicle
+    lidar = lidar[lidar[..., 2] < -2.5 + 100]
+    lidar = lidar[lidar[..., 2] > -2.5 + 0.2]
+    features = splat_points(lidar)
+    features = np.stack([features], axis=-1)
+    features = np.transpose(features, (2, 0, 1))
+    features *= 255
+    features = features.astype(np.uint8)
+    return features
