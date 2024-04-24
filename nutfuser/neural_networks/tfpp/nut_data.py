@@ -1,5 +1,4 @@
-import nut_config
-import nut_utils
+import nutfuser.utils as utils
 
 import os
 import shutil
@@ -41,21 +40,15 @@ class backbone_dataset(Dataset):
             self.print_dataset_summary_table()
         self.make_data()
         del self.data_folders
-        print(nut_utils.color_info_string(f"I will use {self.ram_that_I_will_use_in_bytes/1e6:.3f} MB of RAM"))
+        print(utils.color_info_string(f"I will use {self.ram_that_I_will_use_in_bytes/1e6:.3f} MB of RAM"))
 
     def close(self):
         self.clean_cache()
 
-    def clean_cache(self):
-        if self.rank == 0:
-            self.cache.close()
-            if os.path.isdir(nut_config.JOB_TMP_DIR):
-                shutil.rmtree(nut_config.JOB_TMP_DIR)
-
     def check_dataset_and_get_data_folders(self):
         # Let's check if the dataset folder really exist
         if not os.path.isdir(self.dataset_path):
-            raise Exception(nut_utils.color_error_string(f"No Dataset folder found in '{self.dataset_path}'!"))
+            raise Exception(utils.color_error_string(f"No Dataset folder found in '{self.dataset_path}'!"))
         
         # I get the first folder I found (random_data_folder). I expect this to be a Data Folder.
         random_data_folder = None
@@ -64,10 +57,10 @@ class backbone_dataset(Dataset):
                 random_data_folder = os.path.join(self.dataset_path, el)
                 break
         # I get all the directories and files inside the random_data_folder
-        all_files = os.listdir(random_data_folder)
+        subfolders = os.listdir(random_data_folder)
         # There I fond out how many cameras we have, for each of them I expect a rgb_A_i folder.
         # Ex: With 3 cameras we expect to have: rgb_A_0, rgb_A_1 and rgb_A_2
-        camera_indexes = [int(el[len("rgb_A_"):]) for el in all_files if "rgb_A_" in el]
+        camera_indexes = [int(el[len("rgb_A_"):]) for el in subfolders if "rgb_A_" in el]
 
         # Knowing how many cameras are there I create the folders_that_should_be_there containing all
         # the folders that I expect to be contained by each Data Folder.
@@ -78,6 +71,11 @@ class backbone_dataset(Dataset):
                             [(f"optical_flow_{i}", ".png") for i in camera_indexes] +\
                             [(f"semantic_{i}", ".png") for i in camera_indexes] +\
                             [("bev_semantic", ".png"),      ("bev_lidar", ".png")]
+        # We check if there is also the rgb_tfpp folder we add it to the folders_that_should_be_there
+        if "rgb_tfpp" in subfolders:
+            self.folders_that_should_be_there += [("rgb_tfpp", ".jpg")]
+        if "lidar_tfpp" in subfolders:
+            self.folders_that_should_be_there += [("lidar_tfpp", ".png")]
         
         def check_that_all_sensors_have_the_same_ammount_of_frame(data_folder_path):
             """
@@ -104,10 +102,10 @@ class backbone_dataset(Dataset):
             good = True
             for el in self.folders_that_should_be_there:
                 if el[0] not in subfolders:
+                    print(utils.color_info_string(f"Skipping '{data_folder_path}' bacause '{el[0]}' subfolder is missing."))
                     good = False
                     break
             if not good:
-                print(nut_utils.color_info_string(f"Skipping '{data_folder_path}' bacause some subfolder is missing."))
                 continue
             elements = check_that_all_sensors_have_the_same_ammount_of_frame(data_folder_path)
             total_number_of_frames += elements
@@ -126,7 +124,7 @@ class backbone_dataset(Dataset):
         """
         # First of all we check if we have found out some weel built data folder
         if len(self.data_folders) == 0:
-            raise nut_utils.NutException(nut_utils.color_error_string(f"No weel built datafolders found in {self.dataset_path}"))
+            raise utils.NutException(utils.color_error_string(f"Not well built datafolders found in {self.dataset_path}"))
         # We get the first Data Folder as an example
         a_data_folder = self.data_folders[0]
         total_size = 0
