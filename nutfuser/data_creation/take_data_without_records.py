@@ -25,7 +25,7 @@ FRAME_COMPASS = []
 DISABLE_ALL_SENSORS = False
 KEEP_GPS = False
 
-def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_found_event, finished_taking_data_event, you_can_tick_event, how_many_frames, where_to_save, back_camera, lateral_cameras):
+def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_found_event, finished_taking_data_event, you_can_tick_event, how_many_frames, where_to_save, back_camera, lateral_cameras, tfpp_inputs):
 
 
     sys.path.append(carla_egg_path)
@@ -42,11 +42,18 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         cameras_indexes.append(1)
         cameras_indexes.append(3)
     global ALREADY_OBTAINED_DATA_FROM_SENSOR_A
-    ALREADY_OBTAINED_DATA_FROM_SENSOR_A = [False for _ in cameras_indexes] # 1, 2, 3, 4
+    ALREADY_OBTAINED_DATA_FROM_SENSOR_A = {f"rgb_A_{i}":False for i in cameras_indexes}
     global ALREADY_OBTAINED_DATA_FROM_SENSOR_B
-    ALREADY_OBTAINED_DATA_FROM_SENSOR_B = [False for _ in range(len(cameras_indexes)*4 + 5)] # rgb_B, depth, semantic, optical_flow, lidar, bev_semantic_top, bev_semantic_bottom, frame_gps_position, compass
-
-
+    ALREADY_OBTAINED_DATA_FROM_SENSOR_B = {f"rgb_B_{i}"       :False for i in cameras_indexes} 
+    ALREADY_OBTAINED_DATA_FROM_SENSOR_B = dict({f"depth_{i}"       :False for i in cameras_indexes}, **ALREADY_OBTAINED_DATA_FROM_SENSOR_B)
+    ALREADY_OBTAINED_DATA_FROM_SENSOR_B = dict({f"semantic_{i}"    :False for i in cameras_indexes}, **ALREADY_OBTAINED_DATA_FROM_SENSOR_B)
+    ALREADY_OBTAINED_DATA_FROM_SENSOR_B = dict({f"optical_flow_{i}":False for i in cameras_indexes}, **ALREADY_OBTAINED_DATA_FROM_SENSOR_B)
+    ALREADY_OBTAINED_DATA_FROM_SENSOR_B = dict({"lidar":False, "bev_semantic_top":False, "bev_semantic_bottom":False, "frame_gps_position":False, "compass":False}, **ALREADY_OBTAINED_DATA_FROM_SENSOR_B)
+    
+    if tfpp_inputs:
+        ALREADY_OBTAINED_DATA_FROM_SENSOR_B["rgb_tfpp"] = False
+        ALREADY_OBTAINED_DATA_FROM_SENSOR_B["lidar_tfpp"] = False
+    
     # Connect the client and set up bp library
     client = carla.Client('localhost', rpc_port)
     client.set_timeout(60.0)
@@ -109,13 +116,21 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             return features
 
         if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
-            lidar_data = np.copy(np.frombuffer(data.raw_data, dtype=np.dtype('f4')))
-            lidar_data = np.reshape(lidar_data, (int(lidar_data.shape[0] / 4), 4))
-            lidar_data = lidar_to_histogram_features(lidar_data[:, :3])[0]
+            lidar_data_raw = np.copy(np.frombuffer(data.raw_data, dtype=np.dtype('f4')))
+            lidar_data_raw = np.reshape(lidar_data_raw, (int(lidar_data_raw.shape[0] / 4), 4))
+
+            # MY LIDAR
+            lidar_data = lidar_to_histogram_features(lidar_data_raw[:, :3])[0]
             lidar_data = np.rot90(lidar_data)
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS["lidar"], f"{saved_frame}.png"), lidar_data)
-            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[-5] = True
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B["lidar"] = True
+
+            # TFPP ORIGINAL LIDAR
+            if tfpp_inputs:
+                lidar_data = utils.lidar_to_histogram_features_tfpp_original(lidar_data_raw[:, :3])[0]
+                cv2.imwrite(os.path.join(PATHS["lidar_tfpp"], f"{saved_frame}.png"), lidar_data)
+                ALREADY_OBTAINED_DATA_FROM_SENSOR_B["lidar_tfpp"] = True
 
     # CAMERAS callback
     def rgb_callback(data, number):
@@ -123,12 +138,12 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             rgb = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"rgb_B_{number}"], f"{saved_frame}.jpg"), rgb)
-            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[0 + number] = True
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[f"rgb_B_{number}"] = True
         elif not DISABLE_ALL_SENSORS and (data.frame + 1 - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             rgb = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"rgb_A_{number}"], f"{saved_frame}.jpg"), rgb)
-            ALREADY_OBTAINED_DATA_FROM_SENSOR_A[0 + number] = True
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_A[f"rgb_A_{number}"] = True
 
     # DEPTH callback
     def depth_callback(data, number):
@@ -138,7 +153,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             depth = depth[: , :, 0]
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"depth_{number}"], f"{saved_frame}.png"), depth)
-            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[len(cameras_indexes) + number] = True
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[f"depth_{number}"] = True
 
     # SEMATIC callback
     def semantic_callback(data, number):
@@ -148,7 +163,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             semantic = semantic[:, :, 2]
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"semantic_{number}"], f"{saved_frame}.png"), unify_semantic_tags(semantic))
-            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[len(cameras_indexes)*2 + number] = True
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[f"semantic_{number}"] = True
 
     # OPTICAL FLOW callback
     def optical_flow_callback(data, number):
@@ -162,7 +177,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             optical_flow = np.concatenate([optical_flow, valid], axis=-1).astype(np.uint16)
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS[f"optical_flow_{number}"], f"{saved_frame}.png"), optical_flow)
-            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[len(cameras_indexes)*3 + number] = True
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[f"optical_flow_{number}"] = True
 
     # BEV SEMANTIC callback
     def bev_semantic_callback(data):
@@ -173,7 +188,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             top_bev_semantic = cv2.resize(top_bev_semantic, (config.BEV_IMAGE_H, config.BEV_IMAGE_W), interpolation= cv2.INTER_NEAREST_EXACT)
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS["bev_semantic"], f"top_{saved_frame}.png"), top_bev_semantic)
-            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[-4] = True
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B["bev_semantic_top"] = True
 
     # BOTTOM BEV SEMANTIC callback
     def bev_bottom_semantic_callback(data):
@@ -185,7 +200,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             bottom_bev_semantic =  np.flip(bottom_bev_semantic, 1)
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS["bev_semantic"], f"bottom_{saved_frame}.png"), bottom_bev_semantic)
-            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[-3] = True
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B["bev_semantic_bottom"] = True
 
     # GPS callback
     def gps_callback(data):
@@ -193,13 +208,21 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             ALL_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
         if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             FRAME_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
-            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[-2] = True
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B["frame_gps_position"] = True
 
     # IMU callback
     def imu_callback(data):
         if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             FRAME_COMPASS.append(data.compass)
-            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[-1] = True
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B["compass"] = True
+    
+    # TFPP rgb callback
+    def rgb_tfpp_callback(data):
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+            rgb = np.reshape(np.copy(data.raw_data), (data.height, data.width, 4))
+            saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
+            cv2.imwrite(os.path.join(PATHS["rgb_tfpp"], f"{saved_frame}.jpg"), rgb)
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B["rgb_tfpp"] = True
 
     # LIDAR
     lidar_bp = bp_lib.find('sensor.lidar.ray_cast')
@@ -257,35 +280,48 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     # IMU
     imu_bp = bp_lib.find("sensor.other.imu")
 
+    # RGB TFPP
+    rgb_tfpp_bp = bp_lib.find("sensor.camera.rgb")
+    rgb_tfpp_bp.set_attribute("fov", "110")
+    rgb_tfpp_bp.set_attribute("image_size_x", f"{config.IMAGE_W}")
+    rgb_tfpp_bp.set_attribute("image_size_y", f"{config.IMAGE_H}")
+
     transformations = []
 
     # Obvious CAMERAS
-    transformations.append(carla.Transform(carla.Location(x=1.0, y=+0.0, z=2.0),
-                                        carla.Rotation(pitch=0.0, roll=0, yaw=0)))
-    transformations.append(carla.Transform(carla.Location(x=0.0, y=-1.0, z=2.0),
-                                        carla.Rotation(pitch=-5.0, roll=0, yaw=90)))
-    transformations.append(carla.Transform(carla.Location(x=-1.0, y=+0.0, z=2.0),
-                                        carla.Rotation(pitch=0.0, roll=0, yaw=180)))
-    transformations.append(carla.Transform(carla.Location(x=+0.0, y=1.0, z=2.0),
-                                        carla.Rotation(pitch=-5.0, roll=0, yaw=270)))
+    transformations.append(carla.Transform( carla.Location(x=1.0, y=+0.0, z=2.0),
+                                            carla.Rotation(pitch=0.0, roll=0, yaw=0)))
+    transformations.append(carla.Transform( carla.Location(x=0.0, y=-1.0, z=2.0),
+                                            carla.Rotation(pitch=-5.0, roll=0, yaw=90)))
+    transformations.append(carla.Transform( carla.Location(x=-1.0, y=+0.0, z=2.0),
+                                            carla.Rotation(pitch=0.0, roll=0, yaw=180)))
+    transformations.append(carla.Transform( carla.Location(x=+0.0, y=1.0, z=2.0),
+                                            carla.Rotation(pitch=-5.0, roll=0, yaw=270)))
 
-    bev_transformation = carla.Transform(carla.Location(x=+0.0, y=0.0, z=config.BEV_ALTITUDE),
-                                        carla.Rotation(pitch=-90, roll=0, yaw=0))
+    # SEMANTIC BEV
+    bev_transformation = carla.Transform(   carla.Location(x=+0.0, y=0.0, z=config.BEV_ALTITUDE),
+                                            carla.Rotation(pitch=-90, roll=0, yaw=0))
 
-    bottom_bev_transformation = carla.Transform(carla.Location(x=+0.0, y=0.0, z=-config.BEV_BOTTOM_ALTITUDE),
-                                        carla.Rotation(pitch=90, roll=180, yaw=0))
+    bottom_bev_transformation = carla.Transform(    carla.Location(x=+0.0, y=0.0, z=-config.BEV_BOTTOM_ALTITUDE),
+                                                    carla.Rotation(pitch=90, roll=180, yaw=0))
+
+    # RGBTFPP
+    rgb_tfpp_transformation = carla.Transform(  carla.Location(x=-1.5, y=0, z=2.0),
+                                                carla.Rotation(pitch=0.0, roll=0, yaw=0))
 
     sensors = {}
     sensors["lidar"] = world.spawn_actor(lidar_bp, lidar_init_trans, attach_to=hero)
     sensors["bev_semantic"] = world.spawn_actor(bev_semantic_bp, bev_transformation, attach_to=hero)
     sensors["bottom_bev_semantic"] = world.spawn_actor(bottom_bev_semantic_bp, bottom_bev_transformation, attach_to=hero)
     for i in cameras_indexes:
-        sensors[f"rgb_{i}"] = world.spawn_actor(camera_bp, transformations[i] , attach_to=hero)
+        sensors[f"rgb_{i}"] = world.spawn_actor(camera_bp, transformations[i], attach_to=hero)
         sensors[f"depth_{i}"] = world.spawn_actor(depth_bp, transformations[i], attach_to=hero)
         sensors[f"semantic_{i}"] = world.spawn_actor(semantic_bp, transformations[i], attach_to=hero)
         sensors[f"optical_flow_{i}"] = world.spawn_actor(optical_flow_bp, transformations[i], attach_to=hero)
     sensors["gps"] = world.spawn_actor(gps_bp, lidar_init_trans, attach_to=hero)
     sensors["imu"] = world.spawn_actor(imu_bp, lidar_init_trans, attach_to=hero)
+    if tfpp_inputs:
+        sensors["rgb_tfpp"] = world.spawn_actor(rgb_tfpp_bp, rgb_tfpp_transformation, attach_to=hero)
 
     # Connect Sensor and Callbacks
     sensors["lidar"].listen(lambda data: lidar_callback(data))
@@ -298,6 +334,8 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         sensors[f"optical_flow_{i}"].listen(lambda optical_flow, i=i: optical_flow_callback(optical_flow, i))
     sensors["gps"].listen(lambda data: gps_callback(data))
     sensors["imu"].listen(lambda data: imu_callback(data))
+    if tfpp_inputs:
+        sensors["rgb_tfpp"].listen(lambda data: rgb_tfpp_callback(data))
 
     # Create Directory Branches
     now = datetime.now()
@@ -321,6 +359,9 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         PATHS[f"depth_{i}"] = os.path.join(where_to_save, depth_folders_name[i])
         PATHS[f"semantic_{i}"] = os.path.join(where_to_save, semantic_folders_name[i])
         PATHS[f"optical_flow_{i}"] = os.path.join(where_to_save, optical_flow_folders_name[i])
+    if tfpp_inputs:
+        PATHS["rgb_tfpp"] = os.path.join(where_to_save, "rgb_tfpp")
+        PATHS["lidar_tfpp"] = os.path.join(where_to_save, "lidar_tfpp")
 
     for key_path in PATHS:
         os.mkdir(PATHS[key_path])
@@ -341,6 +382,9 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             sensors[f"semantic_{i}"].destroy()
             sensors[f"optical_flow_{i}"].stop()
             sensors[f"optical_flow_{i}"].destroy()
+        if tfpp_inputs:
+            sensors["rgb_tfpp"].stop()
+            sensors["rgb_tfpp"].destroy()
         exit()
 
     def merge_semantics(bev_semantic, bottom_bev_semantic):
@@ -445,17 +489,19 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         world_snapshot = world.wait_for_tick()
         if (world_snapshot.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             while True:
-                if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_B) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_B):
+                if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_B.values()) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_B):
                     break
-            #print("Obtained all the sensors data! B")
+            # print("Obtained all the sensors data! B")
         elif (world_snapshot.frame + 1 - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             while True:
-                if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_A) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_A):
+                if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_A.values()) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_A):
                     break
-            #print("Obtained all the sensors data! A")
+            # print("Obtained all the sensors data! A")
         you_can_tick_event.set()
-        ALREADY_OBTAINED_DATA_FROM_SENSOR_A = [False for _ in range(len(ALREADY_OBTAINED_DATA_FROM_SENSOR_A))]
-        ALREADY_OBTAINED_DATA_FROM_SENSOR_B = [False for _ in range(len(ALREADY_OBTAINED_DATA_FROM_SENSOR_B))]
+        for key in ALREADY_OBTAINED_DATA_FROM_SENSOR_A:
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_A[key] = False
+        for key in ALREADY_OBTAINED_DATA_FROM_SENSOR_B:
+            ALREADY_OBTAINED_DATA_FROM_SENSOR_B[key] = False
     DISABLE_ALL_SENSORS = True
     KEEP_GPS = True
     for _ in tqdm(range(config.FRAME_TO_KEEP_GOING_AFTER_THE_END), desc=utils.color_info_string("I get the last gps data...")):
@@ -558,7 +604,6 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         frame_targetpoints[frame_id] = vehicle_targetpoint
         # let's check if we need to calculate the next targetpoint
         distance_from_target_point = math.sqrt(vehicle_origin_carla_coordinate_targetpoint[0]**2 + vehicle_origin_carla_coordinate_targetpoint[1]**2)
-        print(distance_from_target_point)
         if distance_from_target_point < config.MINIMUM_DISTANCE_FOR_NEXT_TARGETPOINT:
             carla_coordinate_targetpoint = None
     np.save(os.path.join(os.path.join(where_to_save), "frame_targetpoints.npy"), frame_targetpoints)
