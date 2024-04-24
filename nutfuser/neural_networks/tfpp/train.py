@@ -25,7 +25,7 @@ import cv2
 from config import GlobalConfig
 from model import LidarCenterNet
 from nut_data import backbone_dataset
-import nut_utils
+import nutfuser.utils as utils
 
 import pathlib
 import datetime
@@ -891,8 +891,8 @@ class Engine(object):
                 flow_comparison = np.zeros((pred_flow.shape[0]*2, pred_flow.shape[1], 3), dtype=np.uint8)
                 # print(f"PRED\t0 : [{np.min(pred_flow[:, :, 0])}; {np.max(pred_flow[:, :, 0])}] 1 : [{np.min(pred_flow[:, :, 1])}; {np.max(pred_flow[:, :, 1])}]")
                 # print(f"LABEL\t0 : [{np.min(data['optical_flow_0'][:, :, 0])}; {np.max(data['optical_flow_0'][:, :, 0])}] 1 : [{np.min(data['optical_flow_0'][:, :, 1])}; {np.max(data['optical_flow_0'][:, :, 1])}]")
-                flow_comparison[0:pred_flow.shape[0], :, :] = nut_utils.optical_flow_to_human(pred_flow)
-                flow_comparison[pred_flow.shape[0]:, :, :] = nut_utils.optical_flow_to_human(data["optical_flow_0"][:, :, :2])
+                flow_comparison[0:pred_flow.shape[0], :, :] = utils.optical_flow_to_human(pred_flow)
+                flow_comparison[pred_flow.shape[0]:, :, :] = utils.optical_flow_to_human(data["optical_flow_0"][:, :, :2])
 
             cv2.imwrite(os.path.join(folder_path, f"depth_{k}.png"), depth_comparison)
             cv2.imwrite(os.path.join(folder_path, f"semantic_{k}.png"), semantic_comparison*30)
