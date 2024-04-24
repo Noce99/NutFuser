@@ -19,7 +19,7 @@ from nutfuser.neural_networks.tfpp.model import LidarCenterNet
 from nutfuser.neural_networks.tfpp.model_original import LidarCenterNet as LidarCenterNetOriginal
 from nutfuser.neural_networks.tfpp.config import GlobalConfig
 from nutfuser.neural_networks.tfpp.nut_data import backbone_dataset
-from nutfuser.neural_networks.tfpp.nut_utils import optical_flow_to_human
+from nutfuser.utils import optical_flow_to_human
 
 def get_arguments():
     argparser = argparse.ArgumentParser(description=__doc__)
@@ -54,7 +54,8 @@ def get_arguments():
     argparser.add_argument(
         "--data_folder",
         help="Where to take the data for validation!",
-        required=True,
+        required=False,
+        default=os.path.join(pathlib.Path(__file__).parent.resolve(), "datasets", "evaluation_dataset"),
         type=str
     )
     args = argparser.parse_args()
@@ -116,6 +117,7 @@ if __name__=="__main__":
     os.mkdir(output_dir)
 
     rgb_path = os.path.join(output_dir, "rgb")
+    lidar_path = os.path.join(output_dir, "lidar")
     depth_path = os.path.join(output_dir, "depth")
     semantic_path = os.path.join(output_dir, "semantic")
     bev_semantic_path = os.path.join(output_dir, "bev_semantic")
@@ -124,13 +126,14 @@ if __name__=="__main__":
         flow_path = os.path.join(output_dir, "optical_flow")
 
     os.mkdir(rgb_path)
+    os.mkdir(lidar_path)
     os.mkdir(depth_path)
     os.mkdir(semantic_path)
     os.mkdir(bev_semantic_path)
     if args.use_flow:
         os.mkdir(flow_path)
 
-    for i, data in enumerate(tqdm(dataloader)):
+    for i, data in enumerate(tqdm(dataloader, desc="Inferencing the NN")):
 
         rgb_a = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
         rgb_b = data["rgb_B_0"].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
@@ -143,6 +146,10 @@ if __name__=="__main__":
         depth_label = (data["depth_0"][:, :, :, 0]/255).contiguous().to(device, dtype=torch.float32)
         lidar = data["bev_lidar"][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
         flow_label = (data["optical_flow_0"][:, :, :, :2] / 2**15 - 1).permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
+        if args.original_tfpp:
+            rgb = data["rgb_tfpp"].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
+            lidar = data["lidar_tfpp"][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
+            lidar /= 255
 
         if args.just_backbone:
             target_point = None
@@ -156,6 +163,7 @@ if __name__=="__main__":
             ego_vel = data["target_speed"].to(device, dtype=torch.float32)
             ego_vel = ego_vel[None, :]
 
+        
         predictions = model(    rgb=rgb,
                                 lidar_bev=lidar,
                                 target_point=target_point,
@@ -194,7 +202,13 @@ if __name__=="__main__":
             pred_flow = ((pred_flow + 1)*(2**15)).permute(0, 2, 3, 1)[0, :, :, :].contiguous().detach().cpu().numpy()
             flow_label = ((flow_label + 1)*(2**15)).permute(0, 2, 3, 1)[0, :, :, :].contiguous().detach().cpu().numpy()
         
-        rgb_comparison = rgb_a[0, :, :, :].permute(1, 2, 0).detach().cpu().numpy().astype(np.uint8)
+        if not args.original_tfpp:
+            rgb_comparison = rgb_a[0, :, :, :].permute(1, 2, 0).detach().cpu().numpy().astype(np.uint8)
+        else:
+            rgb_comparison = rgb[0, :, :, :].permute(1, 2, 0).detach().cpu().numpy().astype(np.uint8)
+        
+
+        lidar_comparison = lidar[0, 0, :, :].detach().cpu().numpy().astype(np.uint8)
 
         depth_comparison = np.zeros((pred_depth.shape[0]*2, pred_depth.shape[1]), dtype=np.uint8)
         depth_comparison[0:pred_depth.shape[0], :] = pred_depth
@@ -210,12 +224,11 @@ if __name__=="__main__":
 
         if args.use_flow:
             flow_comparison = np.zeros((pred_flow.shape[0]*2, pred_flow.shape[1], 3), dtype=np.uint8)
-            # print(f"PRED\t0 : [{np.min(pred_flow[:, :, 0])}; {np.max(pred_flow[:, :, 0])}] 1 : [{np.min(pred_flow[:, :, 1])}; {np.max(pred_flow[:, :, 1])}]")
-            # print(f"LABEL\t0 : [{np.min(flow_label[:, :, 0])}; {np.max(flow_label[:, :, 0])}] 1 : [{np.min(flow_label[:, :, 1])}; {np.max(flow_label[:, :, 1])}]")
             flow_comparison[0:pred_flow.shape[0], :, :] = optical_flow_to_human(pred_flow)
             flow_comparison[pred_flow.shape[0]:, :, :] = optical_flow_to_human(flow_label[:, :, :2])
         
-        cv2.imwrite(os.path.join(rgb_path, f"{i}.png"), rgb_comparison)
+        cv2.imwrite(os.path.join(rgb_path, f"{i}.jpg"), rgb_comparison)
+        cv2.imwrite(os.path.join(lidar_path, f"{i}.png"), lidar_comparison)
         cv2.imwrite(os.path.join(depth_path, f"{i}.png"), depth_comparison)
         cv2.imwrite(os.path.join(semantic_path, f"{i}.png"), semantic_comparison)
         cv2.imwrite(os.path.join(bev_semantic_path, f"{i}.png"), bev_semantic_comparison)
