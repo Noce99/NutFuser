@@ -205,6 +205,7 @@ def check_dataset_folder(dataset_path):
 import time
 
 def create_validation_video(folders_path):
+    print(color_info_string(f"Creating Validation Video in {folders_path}..."))
     for folder in os.listdir(folders_path):
         full_folder_path = os.path.join(folders_path, folder)
         if not os.path.isdir(full_folder_path):
@@ -220,8 +221,10 @@ def create_validation_video(folders_path):
             img = cv2.imread(os.path.join(full_folder_path, f"{frame}{exctention}"))
             video.write(img)
         video.release()
+    print(color_info_success(f"Created Validation Video in {folders_path}!"))
 
-def create_compariso_validation_video(folders_path_A, folders_path_B):
+def create_compariso_validation_video(folders_path_A, folders_path_B, where_to_save):
+    print(color_info_string(f"Creating Comparison Video in {where_to_save}..."))
     folders_in_A = os.listdir(folders_path_A)
     folders_in_B = os.listdir(folders_path_B)
     folders = [element for element in folders_in_A if element in folders_in_B]
@@ -242,8 +245,8 @@ def create_compariso_validation_video(folders_path_A, folders_path_B):
         del int_all_frames_B
         example_of_frame = cv2.imread(os.path.join(full_folder_path_A, all_frames_A[0]))
         exctention = all_frames_A[0][-4:]
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
-        video = cv2.VideoWriter(os.path.join(folders_path_A, f"comparison_{folder}.mp4"), fourcc, 15, (example_of_frame.shape[1], int((example_of_frame.shape[0]/2)*3)))
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        video = cv2.VideoWriter(os.path.join(where_to_save, f"comparison_{folder}.mp4"), fourcc, 15, (example_of_frame.shape[1], int((example_of_frame.shape[0]/2)*3)))
         for frame in tqdm(int_all_frames, desc=f"comparison_{folder}"):
             img_A = cv2.imread(os.path.join(full_folder_path_A, f"{frame}{exctention}"))
             img_B = cv2.imread(os.path.join(full_folder_path_B, f"{frame}{exctention}"))
@@ -252,6 +255,7 @@ def create_compariso_validation_video(folders_path_A, folders_path_B):
             img[img_A.shape[0]//2:, :] = img_B
             video.write(img)
         video.release()
+    print(color_info_success(f"Created Comparison Video in {where_to_save}!"))
 
 def print_nvidia_gpu_status_on_log_file(log_file, delay_in_seconds):
     with open(log_file, 'w') as log:
