@@ -738,6 +738,18 @@ class Engine(object):
         lidar = data["bev_lidar"][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
         flow_label = (data["optical_flow_0"][:, :, :, :2] / 2**15 - 1).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
 
+        if self.config.use_controller_input_prediction:
+                target_point = None
+                command = None
+                ego_vel = None
+        else:
+            target_point = data["targetpoint"].to(self.device, dtype=torch.float32)
+            if target_point.shape[1] == 3:
+                target_point = target_point[:, :-1]
+            command = None
+            ego_vel = data["target_speed"].to(self.device, dtype=torch.float32)
+            ego_vel = ego_vel[None, :]
+
         pred_wp,\
         pred_target_speed,\
         pred_checkpoint,\
