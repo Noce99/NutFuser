@@ -9,6 +9,8 @@ train.py --logdir /path/to/logdir --root_dir /path/to/dataset_root/ --id exp_000
 import argparse
 import json
 import os
+import sys
+import pathlib
 from tqdm import tqdm
 
 import numpy as np
@@ -24,8 +26,10 @@ import cv2
 
 from config import GlobalConfig
 from model import LidarCenterNet
+sys.path.append(str(pathlib.Path(__file__).parent.resolve().parent.resolve().parent.resolve().parent.resolve())) # NutFuser Folder ex: /home/enrico/Projects/Carla/NutFuser
 from nut_data import backbone_dataset
 import nutfuser.utils as utils
+import nutfuser.config as nutfuser_config
 
 import pathlib
 import datetime
@@ -533,8 +537,16 @@ def main():
     else:
         optimizer = optim.AdamW(params, lr=args.lr, amsgrad=True)
 
+    if rank == 0:
+        optimizer.consolidate_state_dict(to=0)
+        names_that_should_be_there = optimizer.state_dict()
+
     if not args.load_file is None and not config.freeze_backbone and args.continue_epoch:
-        optimizer.load_state_dict(torch.load(args.load_file.replace('model_', 'optimizer_'), map_location=device))
+        names_that_are_there = torch.load(args.load_file.replace('model_', 'optimizer_'), map_location=device)
+        if rank == 0:
+            print(f"SHOULD_param_groups: {len(names_that_should_be_there['param_groups'][0]['params'])}") # LIST
+            print(f"ARE_param_groups: {len(names_that_are_there['param_groups'][0]['params'])}") # LIST
+        optimizer.load_state_dict(names_that_are_there)
 
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     num_params = sum(np.prod(p.size()) for p in model_parameters)
@@ -727,7 +739,7 @@ class Engine(object):
         command = None
         ego_vel = None
         target_speed = None
-        checkpoint = None
+        checkpoint_label = None
 
         rgb_a = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
         rgb_b = data["rgb_B_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
@@ -739,17 +751,21 @@ class Engine(object):
         flow_label = (data["optical_flow_0"][:, :, :, :2] / 2**15 - 1).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
 
         if self.config.use_controller_input_prediction:
-                target_point = None
-                command = None
-                ego_vel = None
-        else:
             target_point = data["targetpoint"].to(self.device, dtype=torch.float32)
             if target_point.shape[1] == 3:
                 target_point = target_point[:, :-1]
             command = None
-            ego_vel = data["target_speed"].to(self.device, dtype=torch.float32)
-            ego_vel = ego_vel[None, :]
-
+            ego_vel = data["input_speed"].to(self.device, dtype=torch.float32)
+            ego_vel = ego_vel[:, None]
+            target_speed = data["target_speed"].to(self.device, dtype=torch.float32)
+            checkpoint_label = data["waypoints"].to(self.device, dtype=torch.float32)
+            if checkpoint_label.shape[2] == 3:
+                checkpoint_label = checkpoint_label[:, :, :-1]
+        else:
+            target_point = None
+            command = None
+            ego_vel = None
+        
         pred_wp,\
         pred_target_speed,\
         pred_checkpoint,\
@@ -776,7 +792,7 @@ class Engine(object):
                               pred_bounding_box=pred_bounding_box,
                               waypoint_label=ego_waypoint,
                               target_speed_label=target_speed,
-                              checkpoint_label=checkpoint,
+                              checkpoint_label=checkpoint_label,
                               semantic_label=semantic_label,
                               bev_semantic_label=bev_semantic_label,
                               depth_label=depth_label,
@@ -857,9 +873,22 @@ class Engine(object):
         k = 0
         for idx in some_random_idxs:
             data = self.dataset_val[idx]
-            target_point = None
-            command = None
-            ego_vel = None
+            if self.config.use_controller_input_prediction:
+                target_point = torch.from_numpy(data["targetpoint"]).to(self.device, dtype=torch.float32)
+                if target_point.shape[0] == 3:
+                    target_point = target_point[:-1]
+                target_point = target_point[None, :]
+                command = None
+                ego_vel = torch.tensor([data["input_speed"]]).to(self.device, dtype=torch.float32)
+                ego_vel = ego_vel[:, None]
+                target_speed = torch.from_numpy(data["target_speed"]).to(self.device, dtype=torch.float32)
+                checkpoint_label = torch.from_numpy(data["waypoints"]).to(self.device, dtype=torch.float32)
+                if checkpoint_label.shape[1] == 3:
+                    checkpoint_label = checkpoint_label[:, :-1]
+            else:
+                target_point = None
+                command = None
+                ego_vel = None
 
             rgb_a = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
             rgb_b = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
@@ -895,9 +924,21 @@ class Engine(object):
             semantic_comparison[0:pred_semantic.shape[0], :] = pred_semantic
             semantic_comparison[pred_depth.shape[0]:, :] = data["semantic_0"][:, :, 0]
 
-            bev_semantic_comparison = np.zeros((pred_bev_semantic.shape[0]*2, pred_bev_semantic.shape[1]), dtype=np.uint8)
-            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :] = pred_bev_semantic
-            bev_semantic_comparison[pred_bev_semantic.shape[0]:, :] = np.rot90(data["bev_semantic"][:, :, 0], 3)
+            bev_semantic_comparison = np.zeros((pred_bev_semantic.shape[0]*2, pred_bev_semantic.shape[1], 3), dtype=np.uint8)
+            pred_bev_semantic = np.rot90(pred_bev_semantic, 1)
+            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 0] = pred_bev_semantic
+            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 1] = pred_bev_semantic
+            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 2] = pred_bev_semantic
+            rgb_ground_truth = np.zeros((data["bev_semantic"].shape[0], data["bev_semantic"].shape[1], 3))
+            rgb_ground_truth[:, :] = data["bev_semantic"]
+            for i in range(checkpoint_label.shape[0]):
+                rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-checkpoint_label[i, 0]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M),
+                                                                 int(128-checkpoint_label[i, 1]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
+                                                                 2, (0, 0, 255), -1)
+                rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-pred_checkpoint[0, i, 0]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M),
+                                                                 int(128-pred_checkpoint[0, i, 1]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
+                                                                 3, (0, 255, 0), -1)
+            bev_semantic_comparison[pred_bev_semantic.shape[0]:, :, :] = rgb_ground_truth # np.rot90(data["bev_semantic"][:, :, 0], 3)
 
             if self.config.use_flow:
                 flow_comparison = np.zeros((pred_flow.shape[0]*2, pred_flow.shape[1], 3), dtype=np.uint8)
