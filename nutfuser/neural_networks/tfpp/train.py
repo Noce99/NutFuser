@@ -934,10 +934,15 @@ class Engine(object):
             for i in range(checkpoint_label.shape[0]):
                 rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-checkpoint_label[i, 0]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M),
                                                                  int(128-checkpoint_label[i, 1]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
-                                                                 2, (0, 0, 255), -1)
+                                                                 2, (0, 255, 0), -1)
                 rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-pred_checkpoint[0, i, 0]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M),
                                                                  int(128-pred_checkpoint[0, i, 1]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
-                                                                 3, (0, 255, 0), -1)
+                                                                 3, (0, 0, 255), -1)
+            list_target_speed = [float(el) for el in target_speed]
+            list_predicted_speed = [float(el) for el in torch.nn.functional.softmax(pred_target_speed[0])]
+            cv2.putText(rgb_ground_truth, f"{list_target_speed[0]:.2f}, {list_target_speed[1]:.2f}, {list_target_speed[2]:.2f}, {list_target_speed[3]:.2f}", (0, 128+60), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
+            cv2.putText(rgb_ground_truth, f"{list_predicted_speed[0]:.2f}, {list_predicted_speed[1]:.2f}, {list_predicted_speed[2]:.2f}, {list_predicted_speed[3]:.2f}", (0, 128+90), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 0, 255), thickness=2, lineType=cv2.LINE_AA)
+
             bev_semantic_comparison[pred_bev_semantic.shape[0]:, :, :] = rgb_ground_truth # np.rot90(data["bev_semantic"][:, :, 0], 3)
 
             if self.config.use_flow:
