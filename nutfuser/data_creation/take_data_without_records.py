@@ -628,7 +628,16 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         speeds.append(speed)
     starting_next_speed = sum(speeds) / len(speeds)
     # print(f"[NEXT_{0}] speed = {starting_next_speed:.4f} m/s -> {starting_next_speed*3.6:.4f} km/h")
-    next_speeds.append(starting_next_speed)
+    next_speed_as_probability = [0., 0., 0., 0.]
+    if starting_next_speed < 3.0:
+        next_speed_as_probability[0] = 1.0
+    elif starting_next_speed < 12.5:
+        next_speed_as_probability[1] = 1.0
+    elif starting_next_speed < 23.5:
+        next_speed_as_probability[2] = 1.0
+    else:
+        next_speed_as_probability[3] = 1.0
+    next_speeds.append(next_speed_as_probability)
     # we calculate the speed for the following frames
     for frame_index in tqdm(range(1, len(frame_gps_positions_array)), desc=utils.color_info_string("Saving Speeds...")):
         speeds = []
@@ -644,7 +653,16 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             speeds.append(speed)
         mean_speed = sum(speeds) / len(speeds)
         # print(f"[NEXT_{frame_index}] speed = {mean_speed:.4f} m/s -> {mean_speed*3.6:.4f} km/h")
-        next_speeds.append(mean_speed)
+        next_speed_as_probability = [0., 0., 0., 0.]
+        if mean_speed < 3.0:
+            next_speed_as_probability[0] = 1.0
+        elif mean_speed < 12.5:
+            next_speed_as_probability[1] = 1.0
+        elif mean_speed < 23.5:
+            next_speed_as_probability[2] = 1.0
+        else:
+            next_speed_as_probability[3] = 1.0
+        next_speeds.append(next_speed_as_probability)
     previous_speeds_array = np.array(previous_speeds)
     next_speeds_array = np.array(next_speeds)
     # we save the speed data
