@@ -17,38 +17,38 @@ def get_arguments():
     argparser = argparse.ArgumentParser(description=__doc__)
     argparser.add_argument(
         "--dataset_train",
-        help="Where to take the data for training!",
+        help=f"Where to take the data for training! (default: {os.path.join(pathlib.Path(__file__).parent.resolve(), 'datasets', 'train_dataset')})",
         required=False,
-        default=os.path.join(pathlib.Path(__file__).parent.resolve(), "datasets"),
+        default=os.path.join(pathlib.Path(__file__).parent.resolve(), "datasets", "train_dataset"),
         type=str
     )
     argparser.add_argument(
         "--dataset_validation",
-        help="Where to take the data for validation!",
+        help="Where to take the data for validation! (default: None)",
         required=False,
         default=None,
         type=str
     )
     argparser.add_argument(
         '--just_backbone',
-        help='Set if you want to train just the backbone!',
+        help='Set if you want to train just the backbone! (default: False)',
         action='store_true'
     )
     argparser.add_argument(
         '--batch_size',
-        help='Batch size of the training!',
+        help='Batch size of the training! (default: 10)',
         required=False,
         default=10,
         type=int
     )
     argparser.add_argument(
         '--train_flow',
-        help='If set we train also Optical Flow!',
+        help='If set we train also Optical Flow! (default: False)',
         action='store_true'
     )
     argparser.add_argument(
         "--weights_path",
-        help="Path to the pretrained weights!",
+        help="Path to the pretrained weights! (default: None)",
         default=None,
         required=False,
         type=str
@@ -78,7 +78,7 @@ def get_arguments():
     if args.weights_path is not None and not os.path.isfile(args.weights_path):
         raise  utils.NutException(utils.color_error_string(
             f"The file '{args.weights_path}' does not exist!"))
-    # THERE I PROPERLY CHECK THAT THE DATASETFOLDERS ARE GOOD BUILTED
+    # THERE I PROPERLY CHECK THAT THE DATASETFOLDERS ARE WELL BUILTED
     for folder in tqdm(os.listdir(args.dataset_train)):
         folder_path = os.path.join(args.dataset_train, folder)
         if os.path.isdir(folder_path):
@@ -133,6 +133,11 @@ if __name__=="__main__":
         start_epoch = 0
     else:
         start_epoch = 15
+    
+    if args.just_backbone:
+        train_control_network = 0
+    else:
+        train_control_network = 1
 
     with open(output_log, 'w') as logs_file:
         train_process = subprocess.Popen(
@@ -146,7 +151,8 @@ if __name__=="__main__":
                         f"{args.train_flow}",
                         f"{num_of_gpu}",
                         f"{args.weights_path}",
-                        f"{start_epoch}"],
+                        f"{start_epoch}",
+                        f"{train_control_network}"],
                     universal_newlines=True,
                     stdout=logs_file,
                     stderr=logs_file,
