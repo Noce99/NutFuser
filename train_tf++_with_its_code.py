@@ -53,6 +53,13 @@ def get_arguments():
         required=False,
         type=str
     )
+    argparser.add_argument(
+        '--epoch',
+        help='Epoch at witch we continue the training! (default: 0 -> new training)',
+        required=False,
+        default=0,
+        type=int
+    )
     args = argparser.parse_args()
     # THERE I CHECK THE ARGUMENTS
     if args.dataset_validation is None:
@@ -129,11 +136,6 @@ if __name__=="__main__":
     num_of_gpu = torch.cuda.device_count()
     print(f"Found out {num_of_gpu} GPUs!")
 
-    if args.weights_path is None:
-        start_epoch = 0
-    else:
-        start_epoch = 15
-    
     if args.just_backbone:
         train_control_network = 0
     else:
@@ -151,7 +153,7 @@ if __name__=="__main__":
                         f"{args.train_flow}",
                         f"{num_of_gpu}",
                         f"{args.weights_path}",
-                        f"{start_epoch}",
+                        f"{args.epoch}",
                         f"{train_control_network}"],
                     universal_newlines=True,
                     stdout=logs_file,
