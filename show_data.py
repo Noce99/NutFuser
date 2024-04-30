@@ -21,6 +21,7 @@ MAX_FRAME = 400
 ACTUAL_SECTION = 0
 
 CAMERAS_INDEXES = []
+SPEEDS = [0, 7, 18, 29]
 
 def set_section_title(screen, title):
     txt_img = FONT.render(title, True, SECTION_TITLE_COLOR)
@@ -32,9 +33,10 @@ def show_frame_num_and_speeds(screen, dataset_path):
     if os.path.isfile(previous_speeds_path) and os.path.isfile(next_speeds_path):
         previous_speeds_array = np.load(previous_speeds_path)
         next_speeds_array = np.load(next_speeds_path)
+        next_speed = SPEEDS[np.argmax(next_speeds_array[FRAME])]
         txt_img = SMALL_FONT.render(f"actual : {previous_speeds_array[FRAME]*3.6:.4f} km/h", True, SECTION_TITLE_COLOR)
         screen.blit(txt_img, (20, 80))
-        txt_img = SMALL_FONT.render(f"next : {next_speeds_array[FRAME]*3.6:.4f} km/h", True, SECTION_TITLE_COLOR)
+        txt_img = SMALL_FONT.render(f"next : {next_speed*3.6:.4f} km/h", True, SECTION_TITLE_COLOR)
         screen.blit(txt_img, (20, 100))
     else:
         print("No speed files found!")

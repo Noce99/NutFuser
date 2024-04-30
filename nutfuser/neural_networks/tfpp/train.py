@@ -537,15 +537,8 @@ def main():
     else:
         optimizer = optim.AdamW(params, lr=args.lr, amsgrad=True)
 
-    if rank == 0:
-        optimizer.consolidate_state_dict(to=0)
-        names_that_should_be_there = optimizer.state_dict()
-
     if not args.load_file is None and not config.freeze_backbone and args.continue_epoch:
         names_that_are_there = torch.load(args.load_file.replace('model_', 'optimizer_'), map_location=device)
-        if rank == 0:
-            print(f"SHOULD_param_groups: {len(names_that_should_be_there['param_groups'][0]['params'])}") # LIST
-            print(f"ARE_param_groups: {len(names_that_are_there['param_groups'][0]['params'])}") # LIST
         optimizer.load_state_dict(names_that_are_there)
 
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
