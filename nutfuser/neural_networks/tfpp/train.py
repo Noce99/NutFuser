@@ -706,9 +706,15 @@ class Engine(object):
         self.scheduler = scheduler
         self.iters_per_epoch = len(self.dataloader_train)
         self.scaler = scaler
-        self.tensor_board_i = 0
-        self.tensor_board_val_i = 0
+        self.tensor_board_i = self.cur_epoch * nutfuser_config.NUM_OF_TENSORBOARD_LOGS_PER_EPOCH
+        self.tensor_board_val_i = self.cur_epoch
+        if self.config.use_controller_input_prediction:
+            self.tensor_board_i += 30 * nutfuser_config.NUM_OF_TENSORBOARD_LOGS_PER_EPOCH
+            self.tensor_board_val_i += 30
         self.nut_validation_i = 0
+        steps_after_log_train = (len(self.dataloader_train) - 1) / nutfuser_config.NUM_OF_TENSORBOARD_LOGS_PER_EPOCH
+        self.when_to_log_train = [0] + [round(i*steps_after_log_train) for i in range(1, nutfuser_config.NUM_OF_TENSORBOARD_LOGS_PER_EPOCH)]
+
 
         if rank == 0:
             visual_validation_path = os.path.join(self.args.logdir, "visual_validation")
@@ -833,9 +839,12 @@ class Engine(object):
                         detailed_losses_epoch[key] += float(precision * value + self.detailed_loss_weights[key])
                     else:
                         ##?????????????????????????????????????????????''''
-                        loss += self.detailed_loss_weights[key] * value
-                        detailed_losses_epoch[key] += float(self.detailed_loss_weights[key] * float(value.item()))
-
+                        if key == "loss_flow":
+                            loss += value*nutfuser_config.FLOW_LOSS_MULTIPLIER
+                            detailed_losses_epoch[key] += float(value.item())*nutfuser_config.FLOW_LOSS_MULTIPLIER
+                        else:
+                            loss += value # self.detailed_loss_weights[key] * value # REMOVED THE WEIGHTS ON LOSSES
+                            detailed_losses_epoch[key] += float(value.item()) # float(self.detailed_loss_weights[key] * float(value.item())) # REMOVED THE WEIGHTS ON LOSSES
             self.scaler.scale(loss).backward()
 
             if self.config.use_grad_clip:
@@ -853,7 +862,7 @@ class Engine(object):
             num_batches += 1
             loss_epoch += float(loss.item())
 
-            if i%20 == 0:
+            if i in self.when_to_log_train:
                 self.log_losses(loss_epoch, detailed_losses_epoch, num_batches, '')
 
         self.optimizer.zero_grad(set_to_none=True)
@@ -929,19 +938,21 @@ class Engine(object):
             bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 0] = pred_bev_semantic
             bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 1] = pred_bev_semantic
             bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 2] = pred_bev_semantic
+
             rgb_ground_truth = np.zeros((data["bev_semantic"].shape[0], data["bev_semantic"].shape[1], 3))
             rgb_ground_truth[:, :] = data["bev_semantic"]
-            for i in range(checkpoint_label.shape[0]):
-                rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-checkpoint_label[i, 0]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M),
-                                                                 int(128-checkpoint_label[i, 1]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
-                                                                 2, (0, 255, 0), -1)
-                rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-pred_checkpoint[0, i, 0]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M),
-                                                                 int(128-pred_checkpoint[0, i, 1]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
-                                                                 3, (0, 0, 255), -1)
-            list_target_speed = [float(el) for el in target_speed]
-            list_predicted_speed = [float(el) for el in torch.nn.functional.softmax(pred_target_speed[0])]
-            cv2.putText(rgb_ground_truth, f"{list_target_speed[0]:.2f}, {list_target_speed[1]:.2f}, {list_target_speed[2]:.2f}, {list_target_speed[3]:.2f}", (0, 128+60), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
-            cv2.putText(rgb_ground_truth, f"{list_predicted_speed[0]:.2f}, {list_predicted_speed[1]:.2f}, {list_predicted_speed[2]:.2f}, {list_predicted_speed[3]:.2f}", (0, 128+90), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 0, 255), thickness=2, lineType=cv2.LINE_AA)
+            if self.config.use_controller_input_prediction:
+                for i in range(checkpoint_label.shape[0]):
+                    rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-checkpoint_label[i, 0]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M),
+                                                                    int(128-checkpoint_label[i, 1]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
+                                                                    2, (0, 255, 0), -1)
+                    rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-pred_checkpoint[0, i, 0]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M),
+                                                                    int(128-pred_checkpoint[0, i, 1]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
+                                                                    3, (0, 0, 255), -1)
+                list_target_speed = [float(el) for el in target_speed]
+                list_predicted_speed = [float(el) for el in torch.nn.functional.softmax(pred_target_speed[0])]
+                cv2.putText(rgb_ground_truth, f"{list_target_speed[0]:.2f}, {list_target_speed[1]:.2f}, {list_target_speed[2]:.2f}, {list_target_speed[3]:.2f}", (0, 128+60), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
+                cv2.putText(rgb_ground_truth, f"{list_predicted_speed[0]:.2f}, {list_predicted_speed[1]:.2f}, {list_predicted_speed[2]:.2f}, {list_predicted_speed[3]:.2f}", (0, 128+90), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 0, 255), thickness=2, lineType=cv2.LINE_AA)
 
             bev_semantic_comparison[pred_bev_semantic.shape[0]:, :, :] = rgb_ground_truth # np.rot90(data["bev_semantic"][:, :, 0], 3)
 
@@ -1004,7 +1015,8 @@ class Engine(object):
             self.writer.add_scalar(prefix + 'loss_total', loss_epoch / num_batches, index)
 
             for key, value in detailed_losses_epoch.items():
-                self.writer.add_scalar(prefix + key, value / num_batches, index)
+                if value != 0.0:
+                    self.writer.add_scalar(prefix + key, value / num_batches, index)
 
             if prefix == '':
                 self.tensor_board_i += 1
