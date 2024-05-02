@@ -88,7 +88,7 @@ def infering_the_model(dataset_path, where_to_save, weights_path):
             # Not predicting flow
             a_config_file.use_flow = False
             predicting_flow = False
-        if "wp_decoder.encoder.weight" not in weights.keys():
+        if "wp_decoder.encoder.weight" not in weights.keys() and "checkpoint_decoder.decoder.weight" not in weights.keys():
             # Just a Backbone
             a_config_file.use_controller_input_prediction = False
             just_a_backbone = True
@@ -98,7 +98,7 @@ def infering_the_model(dataset_path, where_to_save, weights_path):
             # A full Network
             a_config_file.use_controller_input_prediction = True
             just_a_backbone = False
-            # We use the xtra sensor file to understand if it's an original fpp Network
+            # We use the extra sensor file to understand if it's an original fpp Network
             # because nutfuser do not use Commands!
             extra_sensor_num = weights["extra_sensor_encoder.0.weight"].shape[1]
             if extra_sensor_num == 7:
