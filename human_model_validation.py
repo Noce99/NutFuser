@@ -111,6 +111,7 @@ def infering_the_model(dataset_path, where_to_save, weights_path):
                 a_config_file.bev_semantic_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
                 tfpp_original = True
             else:
+                a_config_file.use_discrete_command = False
                 tfpp_original = False
         
         print(f"PREDICT FLOW:\t\t{predicting_flow}")
@@ -167,6 +168,10 @@ def infering_the_model(dataset_path, where_to_save, weights_path):
         if predicting_flow:
             flow_path = os.path.join(output_dir, "optical_flow")
 
+        if not just_a_backbone:
+            waypoints_path = os.path.join(output_dir, "waypoints")
+
+
         os.mkdir(rgb_path)
         os.mkdir(lidar_path)
         os.mkdir(depth_path)
@@ -174,9 +179,11 @@ def infering_the_model(dataset_path, where_to_save, weights_path):
         os.mkdir(bev_semantic_path)
         if predicting_flow:
             os.mkdir(flow_path)
+        if not just_a_backbone:
+            os.mkdir(waypoints_path)
 
-        for i, data in enumerate(tqdm(dataloader, desc="Inferencing the NN")):
-
+        for data_index, data in enumerate(tqdm(dataloader, desc="Inferencing the NN")):
+            
             rgb_a = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
             rgb_b = data["rgb_B_0"].permute(0, 3, 1, 2).contiguous().to(device, dtype=torch.float32)
             if predicting_flow:
@@ -201,9 +208,17 @@ def infering_the_model(dataset_path, where_to_save, weights_path):
                 target_point = data["targetpoint"].to(device, dtype=torch.float32)
                 if target_point.shape[1] == 3:
                     target_point = target_point[:, :-1]
+                
                 command = None
-                ego_vel = data["target_speed"].to(device, dtype=torch.float32)
+
+                ego_vel = data["input_speed"].to(device, dtype=torch.float32)
                 ego_vel = ego_vel[None, :]
+
+                target_speed = data["target_speed"].to(device, dtype=torch.float32)
+                
+                checkpoint_label = data["waypoints"][0, :, :].to(device, dtype=torch.float32)
+                if checkpoint_label.shape[1] == 3:
+                    checkpoint_label = checkpoint_label[:, :-1]
 
             
             predictions = model(    rgb=rgb,
@@ -233,7 +248,36 @@ def infering_the_model(dataset_path, where_to_save, weights_path):
                 pred_bounding_box, _, \
                 pred_wp_1, \
                 selected_path = predictions
+
+            # EXPERIMENTS
+            if not tfpp_original:
+                rgb_fake_comparison = utils.create_a_fake_rgb_comparison(data["rgb_A_0"])
+            else:
+                rgb_fake_comparison = utils.create_a_fake_rgb_comparison(data["rgb_tfpp"])
             
+            if not tfpp_original:
+                lidar_fake_comparison = utils.create_a_fake_lidar_comparison(data["bev_lidar"])
+            else:
+                lidar_fake_comparison = utils.create_a_fake_lidar_comparison(data["lidar_tfpp"])
+
+            depth_comparison = utils.create_depth_comparison(predicted_depth=pred_depth, label_depth=data["depth_0"])
+            semantic_comparison = utils.create_semantic_comparison(predicted_semantic=pred_semantic, label_semantic=data["semantic_0"], concatenate_vertically=True)
+            bev_semantic_comparison = utils.create_semantic_comparison(predicted_semantic=pred_bev_semantic, label_semantic=data["bev_semantic"], concatenate_vertically=False)
+            
+            if predicting_flow:
+                flow_comparison = utils.create_flow_comparison(predicted_flow=pred_flow, label_flow=data["optical_flow_0"])
+
+            if not just_a_backbone:
+                waypoints_comparison = utils.create_waypoints_comparison(   label_bev_semantic=data["bev_semantic"],
+                                                                            label_target_speed=data["target_speed"],
+                                                                            label_waypoints=data["waypoints"],
+                                                                            prediction_target_speed=pred_target_speed,
+                                                                            prediction_waypoints=pred_checkpoint,
+                                                                            actual_speed=data["input_speed"],
+                                                                            target_point=data["targetpoint"]
+                                                                        )
+
+            """
             pred_depth = (pred_depth[0, :, :].detach().cpu().numpy()*255).astype(np.uint8)
             pred_semantic = torch.argmax(pred_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
             semantic_label = torch.argmax(semantic_label[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
@@ -252,6 +296,7 @@ def infering_the_model(dataset_path, where_to_save, weights_path):
 
             lidar_comparison = lidar[0, 0, :, :].detach().cpu().numpy().astype(np.uint8)*255
 
+
             depth_comparison = np.zeros((pred_depth.shape[0]*2, pred_depth.shape[1]), dtype=np.uint8)
             depth_comparison[0:pred_depth.shape[0], :] = pred_depth
             depth_comparison[pred_depth.shape[0]:, :] = depth_label
@@ -260,23 +305,78 @@ def infering_the_model(dataset_path, where_to_save, weights_path):
             semantic_comparison[0:pred_semantic.shape[0], :] = pred_semantic * 30
             semantic_comparison[pred_depth.shape[0]:, :] = semantic_label * 30
 
-            bev_semantic_comparison = np.zeros((pred_bev_semantic.shape[0]*2, pred_bev_semantic.shape[1]), dtype=np.uint8)
-            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :] = pred_bev_semantic * 30
-            bev_semantic_comparison[pred_bev_semantic.shape[0]:, :] = bev_semantic_label * 30
+            bev_semantic_comparison = np.zeros((pred_bev_semantic.shape[0]*2, pred_bev_semantic.shape[1], 3), dtype=np.uint8)
+            pred_bev_semantic = np.rot90(pred_bev_semantic, 1)
+            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 0] = pred_bev_semantic * 30
+            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 1] = pred_bev_semantic * 30
+            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 2] = pred_bev_semantic * 30
+
+            rgb_ground_truth = np.zeros((bev_semantic_label.shape[0], bev_semantic_label.shape[1], 3))
+            rgb_ground_truth[:, :, 0] = np.rot90(bev_semantic_label * 30, 1)
+            rgb_ground_truth[:, :, 1] = np.rot90(bev_semantic_label * 30, 1)
+            rgb_ground_truth[:, :, 2] = np.rot90(bev_semantic_label * 30, 1)
+            if not just_a_backbone:
+                target_point_x = target_point[0, 0]*256/config.BEV_SQUARE_SIDE_IN_M
+                target_point_y = target_point[0, 1]*256/config.BEV_SQUARE_SIDE_IN_M
+                if target_point_x > 128:
+                    target_point_x = 128
+                elif target_point_x < -128:
+                    target_point_x = -128
+                if target_point_y > 128:
+                    target_point_y = 128
+                elif target_point_y < -128:
+                    target_point_y = -128
+                rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-target_point_x),
+                                                                 int(128-target_point_y)),
+                                                                5, (0, 255, 255), -1)
+                for i in range(checkpoint_label.shape[0]):
+                    rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-pred_checkpoint[0, i, 0]*256/config.BEV_SQUARE_SIDE_IN_M),
+                                                                    int(128-pred_checkpoint[0, i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)),
+                                                                    3, (0, 0, 255), -1)
+                    rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-checkpoint_label[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M),
+                                                                    int(128-checkpoint_label[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)),
+                                                                    2, (0, 255, 0), -1)
+                target_speed = target_speed[0]
+                list_target_speed = [float(el) for el in target_speed]
+                list_predicted_speed = [float(el) for el in torch.nn.functional.softmax(pred_target_speed[0], dim=0)]
+                cv2.putText(rgb_ground_truth, f"{float(ego_vel[0, 0]*3.6):.2f} km/h", (0, 128+60), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
+                values_speed = [0, 7, 18, 29]
+                max_index_label_speed = 0
+                tmp = list_target_speed[0]
+                for i in range(1, 4):
+                    if list_target_speed[i] > tmp:
+                        tmp = list_target_speed[i]
+                        max_index_label_speed = i
+                value_label_target_speed = values_speed[max_index_label_speed]
+                cv2.putText(rgb_ground_truth, f"{list_target_speed[0]:.2f}, {list_target_speed[1]:.2f}, {list_target_speed[2]:.2f}, {list_target_speed[3]:.2f} {value_label_target_speed:.2f} km/h", (0, 128+90), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(0, 255, 0), thickness=1, lineType=cv2.LINE_AA)
+                max_index_predicted_speed = 0
+                tmp = list_predicted_speed[0]
+                for i in range(1, 4):
+                    if list_predicted_speed[i] > tmp:
+                        tmp = list_predicted_speed[i]
+                        max_index_predicted_speed = i
+                value_label_target_speed = values_speed[max_index_predicted_speed]
+                cv2.putText(rgb_ground_truth, f"{list_predicted_speed[0]:.2f}, {list_predicted_speed[1]:.2f}, {list_predicted_speed[2]:.2f}, {list_predicted_speed[3]:.2f} {value_label_target_speed:.2f} km/h", (0, 128+120), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(0, 0, 255), thickness=1, lineType=cv2.LINE_AA)
+
+            bev_semantic_comparison[pred_bev_semantic.shape[0]:, :, :] = rgb_ground_truth
 
             if predicting_flow:
                 flow_comparison = np.zeros((pred_flow.shape[0]*2, pred_flow.shape[1], 3), dtype=np.uint8)
                 flow_comparison[0:pred_flow.shape[0], :, :] = optical_flow_to_human(pred_flow)
                 flow_comparison[pred_flow.shape[0]:, :, :] = optical_flow_to_human(flow_label[:, :, :2])
+            """
             
-            cv2.imwrite(os.path.join(rgb_path, f"{i}.jpg"), rgb_comparison)
-            cv2.imwrite(os.path.join(lidar_path, f"{i}.png"), lidar_comparison)
-            cv2.imwrite(os.path.join(depth_path, f"{i}.png"), depth_comparison)
-            cv2.imwrite(os.path.join(semantic_path, f"{i}.png"), semantic_comparison)
-            cv2.imwrite(os.path.join(bev_semantic_path, f"{i}.png"), bev_semantic_comparison)
+            cv2.imwrite(os.path.join(rgb_path, f"{data_index}.jpg"), rgb_fake_comparison)
+            cv2.imwrite(os.path.join(lidar_path, f"{data_index}.png"), lidar_fake_comparison)
+            cv2.imwrite(os.path.join(depth_path, f"{data_index}.png"), depth_comparison)
+            cv2.imwrite(os.path.join(semantic_path, f"{data_index}.png"), semantic_comparison)
+            cv2.imwrite(os.path.join(bev_semantic_path, f"{data_index}.png"), bev_semantic_comparison)
 
             if predicting_flow:
-                cv2.imwrite(os.path.join(flow_path, f"{i}.png"), flow_comparison)
+                cv2.imwrite(os.path.join(flow_path, f"{data_index}.png"), flow_comparison)
+
+            if not just_a_backbone:
+                cv2.imwrite(os.path.join(waypoints_path, f"{data_index}.png"), waypoints_comparison)
 
         print(utils.color_info_success(f"Saved everything in '{output_dir}'"))
         return output_dir, name

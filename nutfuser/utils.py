@@ -3,10 +3,14 @@ import numpy as np
 import math
 import cv2
 import os
+import torch 
+
 from tqdm import tqdm
 from datetime import datetime
 from pynvml import *
 from nutfuser.raft_flow_colormap import flow_to_image
+import nutfuser.config as config
+
 
 
 def color_error_string(string):
@@ -311,3 +315,181 @@ def lidar_to_histogram_features_tfpp_original(lidar):
     features *= 255
     features = features.astype(np.uint8)
     return features
+
+def process_array_and_tensor(an_array_or_tensor, denormalize=False, data_dims=2, channels=1, dtype=None, argmax=False, softmax=False):
+    if channels == 1:
+        expected_dims = data_dims
+    else:
+        expected_dims = data_dims + 1
+
+    actual_dims = len(an_array_or_tensor.shape)
+    if actual_dims < expected_dims:
+        raise NutException(f"The expected dimension [{expected_dims}] is bigger than the actual one {actual_dims}!")
+    
+    # Denormalization
+    if denormalize:
+        maximum = an_array_or_tensor.max()
+        if maximum <= 1.:
+            an_array_or_tensor *= 255
+        else:
+            raise NutException(f"Asked to denormalize but seems that the tensor/array is not normalized! [max = {maximum:.3f} > 1.0]")
+    # Check if Batch Size is Present
+    if an_array_or_tensor.shape[0] == 1 and actual_dims > 1:
+        an_array_or_tensor = an_array_or_tensor[0]
+
+    # Argmax if requested
+    if argmax:
+        if isinstance(an_array_or_tensor, torch.Tensor):
+            an_array_or_tensor = torch.argmax(an_array_or_tensor, dim=0)
+        else:
+            raise NutException(f"Asked to apply argmax but it's not a torch.Tensor! [{type(an_array_or_tensor)}]")
+
+
+    actual_dims = len(an_array_or_tensor.shape)
+    # Check correct ammount of channels
+    if channels == 1 and actual_dims > expected_dims:
+        an_array_or_tensor = an_array_or_tensor[:, :, 0]
+    elif channels != 1:
+        if an_array_or_tensor.shape[-1] != channels:
+            raise NutException(f"Wrong number of channels! Expected {channels} but found {an_array_or_tensor.shape[-1]}!")
+
+    actual_dims = len(an_array_or_tensor.shape)
+    if actual_dims < expected_dims:
+        raise NutException(f"The expected dimension [{expected_dims}] is bigger than the actual one {actual_dims} after some change!")
+
+    if isinstance(an_array_or_tensor, torch.Tensor):
+        if softmax:
+            an_array_or_tensor = an_array_or_tensor.contiguous().detach().cpu()
+            an_array_or_tensor = torch.nn.functional.softmax(an_array_or_tensor, dim=0)
+            return (an_array_or_tensor.numpy()).astype(dtype)
+        if dtype is not None:
+            return (an_array_or_tensor.contiguous().detach().cpu().numpy()).astype(dtype)
+        else:
+            return an_array_or_tensor.contiguous().detach().cpu().numpy()
+
+def create_depth_comparison(predicted_depth, label_depth):
+    predicted_depth = process_array_and_tensor(predicted_depth, denormalize=True, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
+    label_depth = process_array_and_tensor(label_depth, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
+    
+    depth_comparison = np.zeros((predicted_depth.shape[0]*2, predicted_depth.shape[1]), dtype=np.uint8)
+    depth_comparison[0:predicted_depth.shape[0], :] = predicted_depth
+    depth_comparison[label_depth.shape[0]:, :] = label_depth
+
+    return depth_comparison
+
+def color_a_semantic_image(a_semantic_array):
+    output = np.zeros(shape=(a_semantic_array.shape[0], a_semantic_array.shape[1], 3), dtype=np.uint8)
+    for key in config.NUTFUSER_SEMANTIC_COLOR:
+        output[a_semantic_array==key] = config.NUTFUSER_SEMANTIC_COLOR[key]
+    return output
+
+def create_semantic_comparison(predicted_semantic, label_semantic, concatenate_vertically=True):
+    predicted_semantic = process_array_and_tensor(predicted_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=True)
+    label_semantic = process_array_and_tensor(label_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
+    
+    if concatenate_vertically:
+        semantic_comparison = np.zeros((predicted_semantic.shape[0]*2, predicted_semantic.shape[1], 3), dtype=np.uint8)
+        semantic_comparison[0:predicted_semantic.shape[0], :] = color_a_semantic_image(predicted_semantic)
+        semantic_comparison[label_semantic.shape[0]:, :] = color_a_semantic_image(label_semantic)
+    else:
+        semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1]*2, 3), dtype=np.uint8)
+        semantic_comparison[:, 0:predicted_semantic.shape[1]] = np.rot90(color_a_semantic_image(predicted_semantic), 1)
+        semantic_comparison[:, label_semantic.shape[1]:] = color_a_semantic_image(label_semantic)
+
+    return semantic_comparison
+
+def create_flow_comparison(predicted_flow, label_flow):
+    predicted_flow = ((predicted_flow + 1)*(2**15)).permute(0, 2, 3, 1)
+    label_flow = label_flow[:, :, :, :2]
+    predicted_flow = process_array_and_tensor(predicted_flow, denormalize=False, data_dims=2, channels=2, dtype=np.float32, argmax=False)
+    label_flow = process_array_and_tensor(label_flow, denormalize=False, data_dims=2, channels=2, dtype=np.float32, argmax=False)
+
+    flow_comparison = np.zeros((predicted_flow.shape[0]*2, predicted_flow.shape[1], 3), dtype=np.uint8)
+    flow_comparison[0:predicted_flow.shape[0], :, :] = optical_flow_to_human(predicted_flow)
+    flow_comparison[predicted_flow.shape[0]:, :, :] = optical_flow_to_human(label_flow)
+
+    return flow_comparison
+
+def create_a_fake_rgb_comparison(rgb):
+    return process_array_and_tensor(rgb, denormalize=False, data_dims=2, channels=3, dtype=np.uint8, argmax=False)
+
+def create_a_fake_lidar_comparison(lidar):
+    return process_array_and_tensor(lidar, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
+
+def create_waypoints_comparison(label_bev_semantic, label_target_speed, label_waypoints, prediction_target_speed, prediction_waypoints, actual_speed, target_point):
+    label_bev_semantic = process_array_and_tensor(label_bev_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
+    label_bev_semantic_rgb = np.zeros((label_bev_semantic.shape[0], label_bev_semantic.shape[1], 3), dtype=np.uint8)
+    label_bev_semantic_rgb[:, :, 0] = label_bev_semantic * 30
+    label_bev_semantic_rgb[:, :, 1] = label_bev_semantic * 30
+    label_bev_semantic_rgb[:, :, 2] = label_bev_semantic * 30
+    black_part_for_text = np.zeros((label_bev_semantic.shape[0], label_bev_semantic.shape[1], 3), dtype=np.uint8)
+
+    label_target_speed = process_array_and_tensor(label_target_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False)
+    label_waypoints = process_array_and_tensor(label_waypoints, denormalize=False, data_dims=1, channels=3, dtype=np.float32, argmax=False)
+    label_waypoints = label_waypoints[:, :2] # we drop the z
+    prediction_target_speed = process_array_and_tensor(prediction_target_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False, softmax=True)
+    prediction_waypoints = process_array_and_tensor(prediction_waypoints, denormalize=False, data_dims=1, channels=2, dtype=np.float32, argmax=False)
+    actual_speed = process_array_and_tensor(actual_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False)
+    target_point = process_array_and_tensor(target_point, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False)
+    target_point = target_point[:2] # we drop the z
+
+    # We draw the targetpoint
+    target_point_x = target_point[0]*256/config.BEV_SQUARE_SIDE_IN_M
+    target_point_y = target_point[1]*256/config.BEV_SQUARE_SIDE_IN_M
+    if target_point_x > 128:
+        target_point_x = 128
+    elif target_point_x < -128:
+        target_point_x = -128
+    if target_point_y > 128:
+        target_point_y = 128
+    elif target_point_y < -128:
+        target_point_y = -128
+    label_bev_semantic_rgb = cv2.circle(label_bev_semantic_rgb, (int(128-target_point_x), int(128-target_point_y)), 5, (0, 255, 255), -1)
+
+    # We draw the waypoints
+    for i in range(label_waypoints.shape[0]):
+        label_bev_semantic_rgb = cv2.circle(label_bev_semantic_rgb,
+                                            (   int(128-prediction_waypoints[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M),
+                                                int(128-prediction_waypoints[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)),
+                                            3, (0, 0, 255), -1)
+        label_bev_semantic_rgb = cv2.circle(label_bev_semantic_rgb, 
+                                            (   int(128-label_waypoints[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M),
+                                                int(128-label_waypoints[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)),
+                                            2, (0, 255, 0), -1)
+    
+    space_from_left = 10
+    space_from_top = 30
+    # We draw the actual speed
+    cv2.putText(black_part_for_text, f"{float(actual_speed*3.6):.2f} km/h", (space_from_left, space_from_top), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
+
+    speeds = [0, 7, 18, 29]
+    # We draw the label target speed
+    list_label_target_speed = [float(el) for el in label_target_speed]
+    index_best_label_target_speed = np.argmax(label_target_speed)
+    text_label_target_speed = ""
+    for i in range(4):
+        text_label_target_speed += f"{list_label_target_speed[i]:.2f}"
+        if i != 3:
+            text_label_target_speed += ","
+        text_label_target_speed += " "
+    cv2.putText(black_part_for_text, text_label_target_speed, (space_from_left, space_from_top*2), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(0, 255, 0), thickness=1, lineType=cv2.LINE_AA)
+    cv2.putText(black_part_for_text, f"{speeds[index_best_label_target_speed]:.2f} km/h", (space_from_left, space_from_top*3), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(0, 255, 0), thickness=1, lineType=cv2.LINE_AA)
+
+    # We draw the predicted target speed
+    list_predicted_target_speed = [float(el) for el in prediction_target_speed]
+    index_best_predicted_target_speed = np.argmax(prediction_target_speed)
+    text_predicted_target_speed = ""
+    for i in range(4):
+        text_predicted_target_speed += f"{list_predicted_target_speed[i]:.2f}"
+        if i != 3:
+            text_predicted_target_speed += ","
+        text_predicted_target_speed += " "
+    cv2.putText(black_part_for_text, text_predicted_target_speed, (space_from_left, space_from_top*4), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(255, 0, 0), thickness=1, lineType=cv2.LINE_AA)
+    cv2.putText(black_part_for_text, f"{speeds[index_best_predicted_target_speed]:.2f} km/h", (space_from_left, space_from_top*5), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(255, 0, 0), thickness=1, lineType=cv2.LINE_AA)
+
+    waypoints_comparison = np.zeros((label_bev_semantic.shape[0], label_bev_semantic.shape[1]*2, 3), dtype=np.uint8)
+    waypoints_comparison[:, 0:label_bev_semantic.shape[1]] = label_bev_semantic_rgb
+    waypoints_comparison[:, label_bev_semantic.shape[1]:] =black_part_for_text
+
+    return waypoints_comparison
+

@@ -62,3 +62,13 @@ FLOW_LOSS_MULTIPLIER = 10000
 
 # TMP
 START_TIME = time.time()
+
+# VISUALIZATION
+NUTFUSER_SEMANTIC_COLOR = { 0 : (255, 255, 255),
+                            1 : (0,     0,   0),
+                            2 : (0,   255, 255),
+                            3 : (255, 255,   0),
+                            4 : (127,   0, 255),
+                            5 : (255,   0, 255),
+                            6 : (0,     0, 255),
+                            7 : (0,   255,   0) }
