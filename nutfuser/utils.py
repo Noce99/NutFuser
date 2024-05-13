@@ -12,7 +12,6 @@ from nutfuser.raft_flow_colormap import flow_to_image
 import nutfuser.config as config
 
 
-
 def color_error_string(string):
     return colored(string, "red", attrs=["bold"]) # , "blink"
 
