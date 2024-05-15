@@ -188,7 +188,7 @@ class GlobalConfig:
         self.image_architecture = 'regnety_032'  # Image architecture used in the backbone
         self.lidar_architecture = 'regnety_032'  # LiDAR architecture used in the backbone
         # Whether to classify target speeds and regress a path as output representation.
-        self.use_controller_input_prediction = False
+        self.use_controller_input_prediction = True
         # Whether to use the direct control predictions for driving
         self.inference_direct_controller = False
         # Label smoothing applied to the cross entropy losses
@@ -215,6 +215,7 @@ class GlobalConfig:
             'loss_semantic': 1.0,
             'loss_bev_semantic': 1.0,
             'loss_depth': 1.0,
+            'loss_flow' : 1.0,
             'loss_center_heatmap': 1.0,
             'loss_wh': 1.0,
             'loss_offset': 1.0,
@@ -242,6 +243,7 @@ class GlobalConfig:
         self.learn_multi_task_weights = False  # Whether to learn the multi-task weights
         self.use_bev_semantic = True  # Whether to use bev semantic segmentation as auxiliary loss for training.
         self.use_depth = True  # Whether to use depth prediction as auxiliary loss for training.
+        self.use_flow = True # Whether to use optical flow prediction as auxiliary loss for training.
         self.num_repetitions = 3  # How many repetitions of the dataset we train with.
         self.continue_epoch = True  # Whether to continue the training from the loaded epoch or from 0.
 
@@ -445,7 +447,7 @@ class GlobalConfig:
         # Fraction of the down-sampling factor that will be up-sampled in the second Up-sample
         self.deconv_scale_factor_1 = 8
 
-        self.use_discrete_command = True  # Whether to input the discrete target point as input to the network.
+        self.use_discrete_command = False  # Whether to input the discrete target point as input to the network.
         self.add_features = True  # Whether to add (true) or concatenate (false) the features at the end of the backbone.
 
         self.image_u_net_output_features = 512  # Channel dimension of the up-sampled encoded image in bev_encoder

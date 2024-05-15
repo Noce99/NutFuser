@@ -1,12 +1,12 @@
 import sys
 import pathlib
-sys.path.append(str(pathlib.Path(__file__).parent.resolve().parent.resolve()))
-import config
-import utils
-from data_loader import backbone_dataset
-from model import LidarCenterNet
-from trainer import Trainer
-from tfpp_config import GlobalConfig
+
+import nutfuser.config as config
+import nutfuser.utils as utils
+from nutfuser.neural_networks.data_loader import backbone_dataset
+from nutfuser.neural_networks.model import LidarCenterNet
+from nutfuser.neural_networks.trainer import Trainer
+from nutfuser.neural_networks.tfpp_config import GlobalConfig
 
 import torch
 from torch.distributed.optim import ZeroRedundancyOptimizer
@@ -25,25 +25,36 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
-def main(rank: int, world_size: int):
+def main(rank: int, world_size: int, train_dataset_path: str, validation_dataset_path: str, train_just_backbone: bool, train_flow: bool):
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "19991"
     torch.distributed.init_process_group(
         backend="nccl", rank=rank, world_size=world_size)
     torch.cuda.set_device(rank)
-    my_dataset = backbone_dataset(rank)
-    my_model = LidarCenterNet(GlobalConfig())
+    my_train_dataset = backbone_dataset(rank=rank, dataset_path=train_dataset_path)
+    my_validation_dataset = backbone_dataset(rank=rank, dataset_path=validation_dataset_path)
+
+    tfpp_config_file = GlobalConfig()
+    if train_just_backbone:
+        tfpp_config_file.use_controller_input_prediction = False
+    else:
+        tfpp_config_file.use_controller_input_prediction = True
+    if train_flow:
+        tfpp_config_file.use_flow = True
+    else:
+        tfpp_config_file.use_flow = False
+    my_model = LidarCenterNet(tfpp_config_file)
     optimizer = ZeroRedundancyOptimizer(
         my_model.parameters(),
         optimizer_class=optim.AdamW,
         lr=config.LEARNING_RATE,
         amsgrad=True)
     sampler = torch.utils.data.distributed.DistributedSampler(
-        my_dataset,
+        my_train_dataset,
         # drop_last=True,
         shuffle=True)
     dataloader_train = torch.utils.data.DataLoader(
-        my_dataset,
+        my_train_dataset,
         sampler=sampler,
         batch_size=config.BATCH_SIZE,
         # worker_init_fn=seed_worker,
@@ -81,15 +92,22 @@ def main(rank: int, world_size: int):
                 model,
                 optimizer,
                 dataloader_train,
-                my_dataset,
+                my_train_dataset,
+                my_validation_dataset,
                 scheduler,
                 scaler,
                 rank,
-                log_dir)
+                log_dir,
+                train_just_backbone,
+                train_flow,
+                )
     trainer.train_for_epochs(2)
-    my_dataset.close()
 
 if __name__ == "__main__":
     world_size = torch.cuda.device_count()
+    train_dataset_path = "/home/enrico/Projects/Carla/NutFuser/datasets/train_dataset"
+    validation_dataset_path = "/home/enrico/Projects/Carla/NutFuser/datasets/train_dataset"
+    train_just_backbone = True
+    train_flow = False
     # world_size = 2
-    torch.multiprocessing.spawn(main, args=(world_size, ), nprocs=world_size)
+    torch.multiprocessing.spawn(main, args=(world_size, train_dataset_path, validation_dataset_path, train_just_backbone, train_flow), nprocs=world_size)

@@ -1,29 +1,37 @@
 """
 Implements the TransFuser vision backbone.
 """
+import nutfuser.neural_networks.transfuser_utils as t_u
 
 import math
 import torch
 from torch import nn
 import torch.nn.functional as F
 import timm
-import transfuser_utils as t_u
 import copy
-import cv2
-import sys
-import numpy as np
-import matplotlib.pyplot as plt
 
 class TransfuserBackbone(nn.Module):
     """
-      Multi-scale Fusion Transformer for image + LiDAR feature fusion
-      """
+    Multi-scale Fusion Transformer for image + LiDAR feature fusion
+    """
 
     def __init__(self, config):
         super().__init__()
         self.config = config
 
         self.image_encoder = timm.create_model(config.image_architecture, pretrained=True, features_only=True) # config.image_architecture = regnety_032
+
+        # START NOCE
+        # FIRST conv2d in --> self.image_encoder._modules['stem']._modules['conv'] {Conv2d(3, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)}
+        # the weight of the original one have shape of -> [32, 3, 3, 3]
+        # I want a first conv layer : {Conv2d(6, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)}
+        # So the weight of the new layer need to have a shape of -> [32, 6, 3, 3]
+        my_new_first_conv2d = torch.nn.modules.conv.Conv2d(in_channels=6, out_channels=32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        pretrained_weights = self.image_encoder._modules['stem']._modules['conv'].weight.data.detach().clone()
+        self.image_encoder._modules['stem']._modules['conv'] = my_new_first_conv2d
+        pretrained_weights = torch.concatenate([pretrained_weights, pretrained_weights], dim=1).contiguous() / 2
+        self.image_encoder._modules['stem']._modules['conv'].weight.data = pretrained_weights
+        # END NOCE
 
         self.lidar_video = False
         if config.lidar_architecture in ('video_resnet18', 'video_swin_tiny'): # NOT ENTERING
@@ -37,7 +45,7 @@ class TransfuserBackbone(nn.Module):
         # print(f"self.config.img_horz_anchors = {self.config.img_horz_anchors}") # 32
         self.avgpool_img = nn.AdaptiveAvgPool2d((self.config.img_vert_anchors, self.config.img_horz_anchors))
 
-        self.lidar_encoder = timm.create_model( config.lidar_architecture,
+        self.lidar_encoder = timm.create_model(config.lidar_architecture,
                                                 pretrained=False,
                                                 in_chans=in_channels,
                                                 features_only=True)

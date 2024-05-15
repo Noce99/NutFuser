@@ -1,10 +1,11 @@
 """
 The main model structure
 """
-import transfuser_utils as t_u
+from nutfuser.neural_networks.transfuser import TransfuserBackbone, TransformerDecoderLayerWithAttention, TransformerDecoderWithAttention
+import nutfuser.neural_networks.transfuser_utils as t_u
+
 import numpy as np
 from pathlib import Path
-from transfuser import TransfuserBackbone, TransformerDecoderLayerWithAttention, TransformerDecoderWithAttention
 import cv2
 
 import torch
@@ -64,7 +65,6 @@ class LidarCenterNet(nn.Module):
             target_point_size = 0
 
         self.extra_sensors = self.config.use_velocity or self.config.use_discrete_command
-        self.extra_sensors = False
         extra_sensor_channels = 0
         if self.extra_sensors: # <------------ True
             extra_sensor_channels = self.config.extra_sensor_channels
@@ -72,7 +72,6 @@ class LidarCenterNet(nn.Module):
                 extra_sensor_channels = self.config.gru_input_size
 
         # prediction heads
-
         if self.config.use_semantic:
             self.semantic_decoder = t_u.PerspectiveDecoder(
                 in_channels=self.backbone.num_image_features,
@@ -121,6 +120,16 @@ class LidarCenterNet(nn.Module):
                 inter_channel_2=self.config.deconv_channel_num_2,
                 scale_factor_0=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_0,
                 scale_factor_1=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_1)
+
+        if self.config.use_flow:
+            self.flow_decoder = t_u.PerspectiveDecoder(
+                  in_channels=self.backbone.num_image_features,
+                  out_channels=2,
+                  inter_channel_0=self.config.deconv_channel_num_0,
+                  inter_channel_1=self.config.deconv_channel_num_1,
+                  inter_channel_2=self.config.deconv_channel_num_2,
+                  scale_factor_0=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_0,
+                  scale_factor_1=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_1)
 
         if self.config.use_controller_input_prediction:# <------------ True
             if self.config.transformer_decoder_join: # <------------------------ True
@@ -410,6 +419,10 @@ class LidarCenterNet(nn.Module):
             pred_depth = self.depth_decoder(image_feature_grid) # [1, 1, 256, 1024]
             pred_depth = torch.sigmoid(pred_depth).squeeze(1) # [1, 256, 1024]
 
+        pred_flow = None
+        if self.config.use_flow:
+            pred_flow = self.flow_decoder(image_feature_grid)
+
         pred_bev_semantic = None
         if self.config.use_bev_semantic:
             pred_bev_semantic = self.bev_semantic_decoder(bev_feature_grid)
@@ -549,13 +562,24 @@ class LidarCenterNet(nn.Module):
         # ----
 
         return pred_wp, pred_target_speed, pred_checkpoint, pred_semantic, pred_bev_semantic, pred_depth, \
-          pred_bounding_box, attention_weights, pred_wp_1, selected_path
+          pred_bounding_box, attention_weights, pred_wp_1, selected_path, pred_flow
 
 # FORWARD FINISH THERE!!!!!!!!!!!!!!!!!!!!
 
-    def compute_loss(self,  pred_semantic,  pred_bev_semantic,  pred_depth,
-                            semantic_label, bev_semantic_label, depth_label):
+    def compute_loss(self, pred_wp, pred_target_speed, pred_checkpoint, pred_semantic, pred_bev_semantic, pred_depth, pred_flow,
+                     pred_bounding_box, pred_wp_1, selected_path, waypoint_label, target_speed_label, checkpoint_label,
+                     semantic_label, bev_semantic_label, depth_label, flow_label, center_heatmap_label, wh_label, yaw_class_label,
+                     yaw_res_label, offset_label, velocity_label, brake_target_label, pixel_weight_label,
+                     avg_factor_label):
         loss = {}
+
+        if self.config.use_controller_input_prediction:# <------------ True
+            loss_target_speed = self.loss_speed(pred_target_speed, target_speed_label)
+            loss.update({'loss_target_speed': loss_target_speed})
+
+            loss_wp = torch.mean(torch.abs(pred_checkpoint - checkpoint_label))
+            loss.update({'loss_checkpoint': loss_wp})
+
         if self.config.use_semantic:
             loss_semantic = self.loss_semantic(pred_semantic, semantic_label)
             loss.update({'loss_semantic': loss_semantic})
@@ -570,6 +594,12 @@ class LidarCenterNet(nn.Module):
         if self.config.use_depth:
             loss_depth = F.l1_loss(pred_depth, depth_label)
             loss.update({'loss_depth': loss_depth})
+
+        if self.config.use_flow:
+            loss_flow = nn.MSELoss(reduction="mean")(pred_flow, flow_label) # maybe reduction should be sum?
+            # print(f"pred_flow : [{torch.min(pred_flow)}; {torch.max(pred_flow)}]")
+            # print(f"flow_label : [{torch.min(flow_label)}; {torch.max(flow_label)}]")
+            loss.update({'loss_flow': loss_flow})
 
         return loss
 
