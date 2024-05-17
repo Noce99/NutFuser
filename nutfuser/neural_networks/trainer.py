@@ -58,8 +58,12 @@ class Trainer:
         loss_total = 0
         losses_total = {key: 0.0 for key in ["loss_semantic",
                                              "loss_bev_semantic",
-                                             "loss_depth",
-                                             "loss_flow"]}
+                                             "loss_depth"]}
+        if self.train_flow:
+            losses_total["loss_flow"] = 0.0
+        if not self.train_just_backbone:
+            losses_total["loss_target_speed"] = 0.0
+            losses_total["loss_checkpoint"] = 0.0
 
         self.optimizer.zero_grad()
         for i, data in enumerate(tqdm(self.dataloader_train, disable=self.rank != 0)):
@@ -301,7 +305,7 @@ class Trainer:
                                                                     int(128-pred_checkpoint[0, i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)),
                                                                     3, (0, 0, 255), -1)
                 list_target_speed = [float(el) for el in target_speed]
-                list_predicted_speed = [float(el) for el in torch.nn.functional.softmax(pred_target_speed[0])]
+                list_predicted_speed = [float(el) for el in torch.nn.functional.softmax(pred_target_speed[0], dim=0)]
                 cv2.putText(rgb_ground_truth, f"{list_target_speed[0]:.2f}, {list_target_speed[1]:.2f}, {list_target_speed[2]:.2f}, {list_target_speed[3]:.2f}", (0, 128+60), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
                 cv2.putText(rgb_ground_truth, f"{list_predicted_speed[0]:.2f}, {list_predicted_speed[1]:.2f}, {list_predicted_speed[2]:.2f}, {list_predicted_speed[3]:.2f}", (0, 128+90), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 0, 255), thickness=2, lineType=cv2.LINE_AA)
 
