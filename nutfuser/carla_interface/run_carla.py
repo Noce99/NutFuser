@@ -41,11 +41,15 @@ def check_integrity_of_carla_path(args):
     carlaUE4_path = os.path.join(carlaUE4_folder, "CarlaUE4-Linux-Shipping")
     return egg_file_path, carlaUE4_path
 
-def launch_carla_server_saifly_and_wait_till_its_up(rpc_port, carla_server_pid, carlaUE4_path, logs_path, how_many_seconds_to_wait):
+def launch_carla_server_saifly_and_wait_till_its_up(rpc_port, carla_server_pid, carlaUE4_path, logs_path, how_many_seconds_to_wait, show_carla_window=False):
     def start_up_carla_server(rpc_port, carla_server_pid, carlaUE4_path, logs_path, how_many_seconds_to_wait):
         with open(logs_path, 'r+') as logs_file:
+            if not show_carla_window:
+                command_as_list = ["/usr/bin/stdbuf", "-o0", carlaUE4_path, "-RenderOffScreen", "-nosound", f"-carla-rpc-port={rpc_port}"]
+            else:
+                command_as_list = ["/usr/bin/stdbuf", "-o0", carlaUE4_path, "-nosound", f"-carla-rpc-port={rpc_port}"]
             carla_process = subprocess.Popen(
-                ["/usr/bin/stdbuf", "-o0", carlaUE4_path, "-RenderOffScreen", "-nosound", f"-carla-rpc-port={rpc_port}"],
+                command_as_list,
                 stdout=logs_file,
                 stderr=logs_file,
                 universal_newlines=True
