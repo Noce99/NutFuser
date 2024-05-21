@@ -161,21 +161,20 @@ def main(rank: int, world_size: int, train_dataset_path: str, validation_dataset
     my_model.to(rank)
     model = torch.nn.parallel.DistributedDataParallel(my_model, device_ids=[rank])
 
+    now = datetime.datetime.now()
+    current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
+    log_dir = os.path.join(os.getcwd(), "train_logs", f"logs_{current_time}")
     if rank == 0:
-        now = datetime.datetime.now()
-        current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
         if not os.path.isdir(os.path.join(os.getcwd(), "train_logs")):
             os.makedirs(os.path.join(os.getcwd(), "train_logs"))
-        log_dir = os.path.join(os.getcwd(), "train_logs", f"logs_{current_time}")
         os.makedirs(log_dir)
-
         with open(os.path.join(log_dir, 'args.txt'), 'w', encoding='utf-8') as f:
             json.dump("I should write all the args there! Since now I waas to lazy!", f, indent=2)
         with open(os.path.join(log_dir, 'config.pickle'), 'wb') as f2:
             pickle.dump("I should write all the args there! Since now I waas to lazy!", f2, protocol=4)
     else:
-        writer = None
-
+        time.sleep(1)
+        
     trainer = Trainer(
                 model,
                 optimizer,
