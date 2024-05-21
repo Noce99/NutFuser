@@ -190,6 +190,8 @@ if __name__=="__main__":
                 break
     except KeyboardInterrupt:
         pass
+    except psutil.NoSuchProcess:
+        pass
 
     for pid in children_pids:
         try:
