@@ -49,7 +49,8 @@ class Trainer:
         self.when_to_log_train = [0] + [round(i*steps_after_log_train) for i in range(1, config.NUM_OF_TENSORBOARD_LOGS_PER_EPOCH)]
 
         visual_validation_path = os.path.join(self.log_dir, "visual_validation")
-        os.mkdir(visual_validation_path)
+        if self.rank == 0:
+            os.mkdir(visual_validation_path)
 
     def train(self):
         self.model.train()
