@@ -13,7 +13,7 @@ nut_tmp/
 train_logs/
 weights/
 nutfuser/data_creation/matteo_event_camera.py
-scenario_runner/*
+scenario_runner/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
