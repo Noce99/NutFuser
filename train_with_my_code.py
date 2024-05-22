@@ -211,6 +211,7 @@ if __name__ == "__main__":
 
     # There we start the multiprocessing training
     torch.multiprocessing.spawn(main, args=(    gpu_number,
+                                                cpu_number,
                                                 args.dataset_train,
                                                 args.dataset_validation,
                                                 args.just_backbone,
