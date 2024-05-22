@@ -21,6 +21,7 @@ import random
 import time
 from tabulate import tabulate
 from tqdm import tqdm
+import multiprocessing
 
 def get_arguments():
     argparser = argparse.ArgumentParser(description=__doc__)
@@ -113,7 +114,7 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 
-def main(rank: int, world_size: int, train_dataset_path: str, validation_dataset_path: str, train_just_backbone: bool, train_flow: bool, weight_path: str, batch_size: int, epochs: int):
+def main(rank: int, world_size: int, cpu_number: int, train_dataset_path: str, validation_dataset_path: str, train_just_backbone: bool, train_flow: bool, weight_path: str, batch_size: int, epochs: int):
     os.environ["MASTER_ADDR"] = "localhost"
     os.environ["MASTER_PORT"] = "19991"
     torch.distributed.init_process_group(
@@ -147,10 +148,11 @@ def main(rank: int, world_size: int, train_dataset_path: str, validation_dataset
         batch_size=batch_size,
         # worker_init_fn=seed_worker,
         # generator=torch.Generator(device='cpu').manual_seed(torch.initial_seed()),
-        num_workers=4*world_size, # https://discuss.pytorch.org/t/guidelines-for-assigning-num-workers-to-dataloader/813
+        num_workers=int(cpu_number/world_size),
         pin_memory=False,
         #drop_last=True,
         shuffle=False)
+    print(f"int(cpu_number/world_size) = {int(cpu_number/world_size)}")
     milestones = [config.REDUCE_LR_FIRST_TIME, config.REDUCE_LR_SECOND_TIME]
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer,
@@ -193,6 +195,7 @@ def main(rank: int, world_size: int, train_dataset_path: str, validation_dataset
 if __name__ == "__main__":
     args = get_arguments()
     gpu_number = torch.cuda.device_count()
+    cpu_number = multiprocessing.cpu_count()
 
     # Let's show all the training arguments with a table
     a_table_head = ["Argument", "Value"]
@@ -203,6 +206,7 @@ if __name__ == "__main__":
             continue
         a_table.append([arg, getattr(args, arg)])
     a_table.append(["GPUs:", gpu_number])
+    a_table.append(["CPUs:", cpu_number])
     print(tabulate(a_table, headers=a_table_head, tablefmt="grid"))
 
     # There we start the multiprocessing training

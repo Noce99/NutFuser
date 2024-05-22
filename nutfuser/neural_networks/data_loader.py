@@ -35,7 +35,8 @@ class backbone_dataset(Dataset):
             self.print_dataset_summary_table()
         self.make_data()
         del self.data_folders
-        print(utils.color_info_string(f"I will use {self.ram_that_I_will_use_in_bytes/1e6:.3f} MB of RAM"))
+        if self.rank == 0:
+            print(utils.color_info_string(f"I will use {self.ram_that_I_will_use_in_bytes/1e6:.3f} MB of RAM"))
 
     def check_dataset_and_get_data_folders(self):
         # Let's check if the dataset folder really exist
