@@ -147,7 +147,7 @@ def main(rank: int, world_size: int, train_dataset_path: str, validation_dataset
         batch_size=batch_size,
         # worker_init_fn=seed_worker,
         # generator=torch.Generator(device='cpu').manual_seed(torch.initial_seed()),
-        # num_workers=4*world_size, # https://discuss.pytorch.org/t/guidelines-for-assigning-num-workers-to-dataloader/813
+        num_workers=4*world_size, # https://discuss.pytorch.org/t/guidelines-for-assigning-num-workers-to-dataloader/813
         pin_memory=False,
         #drop_last=True,
         shuffle=False)
