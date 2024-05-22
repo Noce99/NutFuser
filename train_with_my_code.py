@@ -147,12 +147,11 @@ def main(rank: int, world_size: int, cpu_number: int, train_dataset_path: str, v
         sampler=sampler,
         batch_size=batch_size,
         # worker_init_fn=seed_worker,
-        # generator=torch.Generator(device='cpu').manual_seed(torch.initial_seed()),
+        generator=torch.Generator(device='cpu'),
         num_workers=int(cpu_number/world_size),
         pin_memory=False,
         #drop_last=True,
         shuffle=False)
-    print(f"int(cpu_number/world_size) = {int(cpu_number/world_size)}")
     milestones = [config.REDUCE_LR_FIRST_TIME, config.REDUCE_LR_SECOND_TIME]
     scheduler = torch.optim.lr_scheduler.MultiStepLR(
         optimizer,
