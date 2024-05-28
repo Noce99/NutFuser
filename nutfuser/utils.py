@@ -10,7 +10,8 @@ from datetime import datetime
 from pynvml import *
 from nutfuser.raft_flow_colormap import flow_to_image
 import nutfuser.config as config
-
+from nutfuser.neural_networks.tfpp_config import GlobalConfig
+from nutfuser.neural_networks.model import LidarCenterNet
 
 def color_error_string(string):
     return colored(string, "red", attrs=["bold"]) # , "blink"
@@ -366,13 +367,17 @@ def process_array_and_tensor(an_array_or_tensor, denormalize=False, data_dims=2,
         else:
             return an_array_or_tensor.contiguous().detach().cpu().numpy()
 
-def create_depth_comparison(predicted_depth, label_depth):
+def create_depth_comparison(predicted_depth, label_depth=None):
     predicted_depth = process_array_and_tensor(predicted_depth, denormalize=True, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
-    label_depth = process_array_and_tensor(label_depth, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
+    if label_depth is not None:
+        label_depth = process_array_and_tensor(label_depth, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
     
-    depth_comparison = np.zeros((predicted_depth.shape[0]*2, predicted_depth.shape[1]), dtype=np.uint8)
-    depth_comparison[0:predicted_depth.shape[0], :] = predicted_depth
-    depth_comparison[label_depth.shape[0]:, :] = label_depth
+        depth_comparison = np.zeros((predicted_depth.shape[0]*2, predicted_depth.shape[1]), dtype=np.uint8)
+        depth_comparison[0:predicted_depth.shape[0], :] = predicted_depth
+        depth_comparison[label_depth.shape[0]:, :] = label_depth
+    else:
+        depth_comparison = np.zeros((predicted_depth.shape[0], predicted_depth.shape[1]), dtype=np.uint8)
+        depth_comparison[:, :] = predicted_depth
 
     return depth_comparison
 
@@ -382,30 +387,42 @@ def color_a_semantic_image(a_semantic_array):
         output[a_semantic_array==key] = config.NUTFUSER_SEMANTIC_COLOR[key]
     return output
 
-def create_semantic_comparison(predicted_semantic, label_semantic, concatenate_vertically=True):
+def create_semantic_comparison(predicted_semantic, label_semantic=None, concatenate_vertically=True):
     predicted_semantic = process_array_and_tensor(predicted_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=True)
-    label_semantic = process_array_and_tensor(label_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
-    
-    if concatenate_vertically:
-        semantic_comparison = np.zeros((predicted_semantic.shape[0]*2, predicted_semantic.shape[1], 3), dtype=np.uint8)
-        semantic_comparison[0:predicted_semantic.shape[0], :] = color_a_semantic_image(predicted_semantic)
-        semantic_comparison[label_semantic.shape[0]:, :] = color_a_semantic_image(label_semantic)
+    if label_semantic is not None:
+        label_semantic = process_array_and_tensor(label_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
+        
+        if concatenate_vertically:
+            semantic_comparison = np.zeros((predicted_semantic.shape[0]*2, predicted_semantic.shape[1], 3), dtype=np.uint8)
+            semantic_comparison[0:predicted_semantic.shape[0], :] = color_a_semantic_image(predicted_semantic)
+            semantic_comparison[label_semantic.shape[0]:, :] = color_a_semantic_image(label_semantic)
+        else:
+            semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1]*2, 3), dtype=np.uint8)
+            semantic_comparison[:, 0:predicted_semantic.shape[1]] = np.rot90(color_a_semantic_image(predicted_semantic), 1)
+            semantic_comparison[:, label_semantic.shape[1]:] = color_a_semantic_image(label_semantic)
     else:
-        semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1]*2, 3), dtype=np.uint8)
-        semantic_comparison[:, 0:predicted_semantic.shape[1]] = np.rot90(color_a_semantic_image(predicted_semantic), 1)
-        semantic_comparison[:, label_semantic.shape[1]:] = color_a_semantic_image(label_semantic)
+        if concatenate_vertically:
+            semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1], 3), dtype=np.uint8)
+            semantic_comparison[:, :] = color_a_semantic_image(predicted_semantic)
+        else:
+            semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1], 3), dtype=np.uint8)
+            semantic_comparison[:, :] = np.rot90(color_a_semantic_image(predicted_semantic), 1)
 
     return semantic_comparison
 
-def create_flow_comparison(predicted_flow, label_flow):
+def create_flow_comparison(predicted_flow, label_flow=None):
     predicted_flow = ((predicted_flow + 1)*(2**15)).permute(0, 2, 3, 1)
-    label_flow = label_flow[:, :, :, :2]
     predicted_flow = process_array_and_tensor(predicted_flow, denormalize=False, data_dims=2, channels=2, dtype=np.float32, argmax=False)
-    label_flow = process_array_and_tensor(label_flow, denormalize=False, data_dims=2, channels=2, dtype=np.float32, argmax=False)
+    if label_flow is not None:
+        label_flow = label_flow[:, :, :, :2]
+        label_flow = process_array_and_tensor(label_flow, denormalize=False, data_dims=2, channels=2, dtype=np.float32, argmax=False)
 
-    flow_comparison = np.zeros((predicted_flow.shape[0]*2, predicted_flow.shape[1], 3), dtype=np.uint8)
-    flow_comparison[0:predicted_flow.shape[0], :, :] = optical_flow_to_human(predicted_flow)
-    flow_comparison[predicted_flow.shape[0]:, :, :] = optical_flow_to_human(label_flow)
+        flow_comparison = np.zeros((predicted_flow.shape[0]*2, predicted_flow.shape[1], 3), dtype=np.uint8)
+        flow_comparison[0:predicted_flow.shape[0], :, :] = optical_flow_to_human(predicted_flow)
+        flow_comparison[predicted_flow.shape[0]:, :, :] = optical_flow_to_human(label_flow)
+    else:
+        flow_comparison = np.zeros((predicted_flow.shape[0], predicted_flow.shape[1], 3), dtype=np.uint8)
+        flow_comparison[:, :, :] = optical_flow_to_human(predicted_flow)
 
     return flow_comparison
 
@@ -415,17 +432,26 @@ def create_a_fake_rgb_comparison(rgb):
 def create_a_fake_lidar_comparison(lidar):
     return process_array_and_tensor(lidar, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
 
-def create_waypoints_comparison(label_bev_semantic, label_target_speed, label_waypoints, prediction_target_speed, prediction_waypoints, actual_speed, target_point):
-    label_bev_semantic = process_array_and_tensor(label_bev_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
-    label_bev_semantic_rgb = np.zeros((label_bev_semantic.shape[0], label_bev_semantic.shape[1], 3), dtype=np.uint8)
-    label_bev_semantic_rgb[:, :, 0] = label_bev_semantic * 30
-    label_bev_semantic_rgb[:, :, 1] = label_bev_semantic * 30
-    label_bev_semantic_rgb[:, :, 2] = label_bev_semantic * 30
-    black_part_for_text = np.zeros((label_bev_semantic.shape[0], label_bev_semantic.shape[1], 3), dtype=np.uint8)
+def create_waypoints_comparison(prediction_target_speed, prediction_waypoints, actual_speed, target_point, label_bev_semantic=None, label_target_speed=None, label_waypoints=None, pred_bev_semantic=None):
+    if label_bev_semantic is not None:
+        background = process_array_and_tensor(label_bev_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
+    elif pred_bev_semantic is not None:
+        background = process_array_and_tensor(pred_bev_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=True)
+        background = np.rot90(background, 1)
+    else:
+        raise NutException(color_error_string("I receinved both 'label_bev_semantic' and 'pred_bev_semantic' as None! :-("))
+    
+    background_rgb = np.zeros((background.shape[0], background.shape[1], 3), dtype=np.uint8)
+    background_rgb[:, :, 0] = background * 30
+    background_rgb[:, :, 1] = background * 30
+    background_rgb[:, :, 2] = background * 30
+    black_part_for_text = np.zeros((background.shape[0], background.shape[1], 3), dtype=np.uint8)
 
-    label_target_speed = process_array_and_tensor(label_target_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False)
-    label_waypoints = process_array_and_tensor(label_waypoints, denormalize=False, data_dims=1, channels=3, dtype=np.float32, argmax=False)
-    label_waypoints = label_waypoints[:, :2] # we drop the z
+    if label_target_speed is not None:
+        label_target_speed = process_array_and_tensor(label_target_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False)
+    if label_waypoints is not None:
+        label_waypoints = process_array_and_tensor(label_waypoints, denormalize=False, data_dims=1, channels=label_waypoints.shape[-1], dtype=np.float32, argmax=False)
+        label_waypoints = label_waypoints[:, :2] # we drop the z
     prediction_target_speed = process_array_and_tensor(prediction_target_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False, softmax=True)
     prediction_waypoints = process_array_and_tensor(prediction_waypoints, denormalize=False, data_dims=1, channels=2, dtype=np.float32, argmax=False)
     actual_speed = process_array_and_tensor(actual_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False)
@@ -443,15 +469,17 @@ def create_waypoints_comparison(label_bev_semantic, label_target_speed, label_wa
         target_point_y = 128
     elif target_point_y < -128:
         target_point_y = -128
-    label_bev_semantic_rgb = cv2.circle(label_bev_semantic_rgb, (int(128-target_point_x), int(128-target_point_y)), 5, (0, 255, 255), -1)
+    background_rgb = cv2.circle(background_rgb, (int(128-target_point_x), int(128-target_point_y)), 5, (0, 255, 255), -1)
+
 
     # We draw the waypoints
-    for i in range(label_waypoints.shape[0]):
-        label_bev_semantic_rgb = cv2.circle(label_bev_semantic_rgb,
-                                            (   int(128-prediction_waypoints[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M),
-                                                int(128-prediction_waypoints[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)),
-                                            3, (0, 0, 255), -1)
-        label_bev_semantic_rgb = cv2.circle(label_bev_semantic_rgb, 
+    for i in range(prediction_waypoints.shape[0]):
+        background_rgb = cv2.circle(background_rgb,
+                                        (   int(128-prediction_waypoints[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M),
+                                            int(128-prediction_waypoints[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)),
+                                        3, (0, 0, 255), -1)
+        if label_waypoints is not None:
+            background_rgb = cv2.circle(background_rgb, 
                                             (   int(128-label_waypoints[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M),
                                                 int(128-label_waypoints[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)),
                                             2, (0, 255, 0), -1)
@@ -462,17 +490,18 @@ def create_waypoints_comparison(label_bev_semantic, label_target_speed, label_wa
     cv2.putText(black_part_for_text, f"{float(actual_speed*3.6):.2f} km/h", (space_from_left, space_from_top), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
 
     speeds = [0, 7, 18, 29]
-    # We draw the label target speed
-    list_label_target_speed = [float(el) for el in label_target_speed]
-    index_best_label_target_speed = np.argmax(label_target_speed)
-    text_label_target_speed = ""
-    for i in range(4):
-        text_label_target_speed += f"{list_label_target_speed[i]:.2f}"
-        if i != 3:
-            text_label_target_speed += ","
-        text_label_target_speed += " "
-    cv2.putText(black_part_for_text, text_label_target_speed, (space_from_left, space_from_top*2), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(0, 255, 0), thickness=1, lineType=cv2.LINE_AA)
-    cv2.putText(black_part_for_text, f"{speeds[index_best_label_target_speed]:.2f} km/h", (space_from_left, space_from_top*3), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(0, 255, 0), thickness=1, lineType=cv2.LINE_AA)
+    if label_target_speed is not None:
+        # We draw the label target speed
+        list_label_target_speed = [float(el) for el in label_target_speed]
+        index_best_label_target_speed = np.argmax(label_target_speed)
+        text_label_target_speed = ""
+        for i in range(4):
+            text_label_target_speed += f"{list_label_target_speed[i]:.2f}"
+            if i != 3:
+                text_label_target_speed += ","
+            text_label_target_speed += " "
+        cv2.putText(black_part_for_text, text_label_target_speed, (space_from_left, space_from_top*2), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(0, 255, 0), thickness=1, lineType=cv2.LINE_AA)
+        cv2.putText(black_part_for_text, f"{speeds[index_best_label_target_speed]:.2f} km/h", (space_from_left, space_from_top*3), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(0, 255, 0), thickness=1, lineType=cv2.LINE_AA)
 
     # We draw the predicted target speed
     list_predicted_target_speed = [float(el) for el in prediction_target_speed]
@@ -486,9 +515,98 @@ def create_waypoints_comparison(label_bev_semantic, label_target_speed, label_wa
     cv2.putText(black_part_for_text, text_predicted_target_speed, (space_from_left, space_from_top*4), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(255, 0, 0), thickness=1, lineType=cv2.LINE_AA)
     cv2.putText(black_part_for_text, f"{speeds[index_best_predicted_target_speed]:.2f} km/h", (space_from_left, space_from_top*5), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(255, 0, 0), thickness=1, lineType=cv2.LINE_AA)
 
-    waypoints_comparison = np.zeros((label_bev_semantic.shape[0], label_bev_semantic.shape[1]*2, 3), dtype=np.uint8)
-    waypoints_comparison[:, 0:label_bev_semantic.shape[1]] = label_bev_semantic_rgb
-    waypoints_comparison[:, label_bev_semantic.shape[1]:] =black_part_for_text
+    waypoints_comparison = np.zeros((background_rgb.shape[0], background_rgb.shape[1]*2, 3), dtype=np.uint8)
+    waypoints_comparison[:, 0:background_rgb.shape[1]] = background_rgb
+    waypoints_comparison[:, background_rgb.shape[1]:] =black_part_for_text
 
     return waypoints_comparison
 
+def lidar_to_histogram_features(lidar):
+    """
+    Convert LiDAR point cloud into 2-bin histogram over a fixed size grid
+    :param lidar: (N,3) numpy, LiDAR point cloud
+    :return: (2, H, W) numpy, LiDAR as sparse image
+    """
+    MAX_HIST_POINTS = 5
+    def splat_points(point_cloud):
+        # 256 x 256 grid
+        xbins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_IMAGE_W+1)
+        ybins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_IMAGE_H+1)
+        hist = np.histogramdd(point_cloud[:, :2], bins=(xbins, ybins))[0]
+        hist[hist > MAX_HIST_POINTS] = MAX_HIST_POINTS
+        overhead_splat = hist / MAX_HIST_POINTS
+        # The transpose here is an efficient axis swap.
+        # Comes from the fact that carla is x front, y right, whereas the image is y front, x right
+        # (x height channel, y width channel)
+        return overhead_splat.T
+    # Remove points above the vehicle
+    lidar = lidar[lidar[..., 2] < -2.5 + config.MAXIMUM_LIDAR_HEIGHT]
+    lidar = lidar[lidar[..., 2] > -2.5 + config.MINIMUM_LIDAR_HEIGHT]
+    features = splat_points(lidar)
+    features = np.stack([features], axis=-1)
+    features = np.transpose(features, (2, 0, 1))
+    features *= 255
+    features = features.astype(np.uint8)
+    return features
+
+def load_model_given_weights(weights_path):
+    try:
+        weights = torch.load(weights_path)
+    except Exception as e:
+        raise NutException(color_error_string(f"Impossible to load weights located in '{weights_path}'!"))
+    
+    a_config_file = GlobalConfig()
+    predicting_flow = None
+    just_a_backbone = None
+    tfpp_original = None
+    if "flow_decoder.deconv1.0.weight" in weights.keys():
+        # Predicting also flow
+        a_config_file.use_flow = True
+        predicting_flow = True
+    else:
+        # Not predicting flow
+        a_config_file.use_flow = False
+        predicting_flow = False
+    if "wp_decoder.encoder.weight" not in weights.keys() and "checkpoint_decoder.decoder.weight" not in weights.keys():
+        # Just a Backbone
+        a_config_file.use_controller_input_prediction = False
+        just_a_backbone = True
+        # So we suppose it's not the original tfpp network
+        tfpp_original = False
+    else:
+        # A full Network
+        a_config_file.use_controller_input_prediction = True
+        just_a_backbone = False
+        # We use the extra sensor file to understand if it's an original fpp Network
+        # because nutfuser do not use Commands!
+        extra_sensor_num = weights["extra_sensor_encoder.0.weight"].shape[1]
+        if extra_sensor_num == 7:
+            # An original tfpp Network
+            a_config_file.use_flow = False
+            a_config_file.num_bev_semantic_classes = 11
+            a_config_file.num_semantic_classes = 7
+            del a_config_file.detailed_loss_weights["loss_flow"]
+            a_config_file.semantic_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            a_config_file.bev_semantic_weights = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            tfpp_original = True
+        else:
+            a_config_file.use_discrete_command = False
+            tfpp_original = False
+    
+    print(f"PREDICT FLOW:\t\t{predicting_flow}")
+    print(f"JUST A BACKBONE:\t{just_a_backbone}")
+    print(f"ORIGINAL TFPP:\t\t{tfpp_original}")
+
+    if tfpp_original:
+        raise NutException(color_error_string(f"You have given me original tfpp weights but I cannot deal with them!"))
+
+    model = LidarCenterNet(a_config_file)
+
+    model.cuda()
+
+    try:
+        model.load_state_dict(weights, strict=False)
+    except Exception as e:
+        raise NutException(color_error_string(f"Weight in '{weights_path}' not compatible with the model!"))
+    
+    return model, predicting_flow, just_a_backbone, tfpp_original
