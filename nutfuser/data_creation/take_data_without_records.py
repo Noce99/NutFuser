@@ -87,40 +87,12 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     # LIDAR callback
     def lidar_callback(data):
-        def lidar_to_histogram_features(lidar):
-            """
-            Convert LiDAR point cloud into 2-bin histogram over a fixed size grid
-            :param lidar: (N,3) numpy, LiDAR point cloud
-            :return: (2, H, W) numpy, LiDAR as sparse image
-            """
-            MAX_HIST_POINTS = 5
-            def splat_points(point_cloud):
-                # 256 x 256 grid
-                xbins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_IMAGE_W+1)
-                ybins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_IMAGE_H+1)
-                hist = np.histogramdd(point_cloud[:, :2], bins=(xbins, ybins))[0]
-                hist[hist > MAX_HIST_POINTS] = MAX_HIST_POINTS
-                overhead_splat = hist / MAX_HIST_POINTS
-                # The transpose here is an efficient axis swap.
-                # Comes from the fact that carla is x front, y right, whereas the image is y front, x right
-                # (x height channel, y width channel)
-                return overhead_splat.T
-            # Remove points above the vehicle
-            lidar = lidar[lidar[..., 2] < -2.5 + config.MAXIMUM_LIDAR_HEIGHT]
-            lidar = lidar[lidar[..., 2] > -2.5 + config.MINIMUM_LIDAR_HEIGHT]
-            features = splat_points(lidar)
-            features = np.stack([features], axis=-1)
-            features = np.transpose(features, (2, 0, 1))
-            features *= 255
-            features = features.astype(np.uint8)
-            return features
-
         if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             lidar_data_raw = np.copy(np.frombuffer(data.raw_data, dtype=np.dtype('f4')))
             lidar_data_raw = np.reshape(lidar_data_raw, (int(lidar_data_raw.shape[0] / 4), 4))
 
             # MY LIDAR
-            lidar_data = lidar_to_histogram_features(lidar_data_raw[:, :3])[0]
+            lidar_data = utils.lidar_to_histogram_features(lidar_data_raw[:, :3])[0]
             lidar_data = np.rot90(lidar_data)
             saved_frame = (data.frame - STARTING_FRAME) // config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS["lidar"], f"{saved_frame}.png"), lidar_data)
