@@ -17,10 +17,12 @@ from __future__ import print_function
 
 import os
 import sys
+import pathlib
 os.environ["CARLA_ROOT"] = "/home/enrico/Projects/Carla/CARLA_0.9.15"
-os.environ["SCENARIO_RUNNER_ROOT"] = "/home/enrico/Projects/Carla/scenario_runner"
+os.environ["SCENARIO_RUNNER_ROOT"] = "/home/enrico/Projects/Carla/NutFuser/scenario_runner"
 sys.path.append(f"{os.environ['CARLA_ROOT']}/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
 sys.path.append(f"{os.environ['CARLA_ROOT']}/PythonAPI/carla")
+sys.path.append(f"{pathlib.Path(__file__).parent.resolve().parent.resolve()}")
 
 import glob
 import traceback
