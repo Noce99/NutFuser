@@ -72,3 +72,8 @@ NUTFUSER_SEMANTIC_COLOR = { 0 : (255, 255, 255),
                             5 : (255,   0, 255),
                             6 : (0,     0, 255),
                             7 : (0,   255,   0) }
+
+# DRIVING SYSTEM
+LIDAR_RECATNGLE_WIDTH = 20
+LIDAR_RECTANGLE_HEIGHT = 120
+MINIMUM_AMMOUNT_OF_OBSTACLES_IN_FRONT = 3
