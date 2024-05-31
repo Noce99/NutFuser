@@ -740,9 +740,13 @@ class Engine(object):
         target_speed = None
         checkpoint_label = None
 
-        rgb_a = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
-        rgb_b = data["rgb_B_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
-        rgb = torch.concatenate([rgb_a, rgb_b], dim=1)
+        if self.config.use_flow:
+            rgb_a = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+            rgb_b = data["rgb_B_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+            rgb = torch.concatenate([rgb_a, rgb_b], dim=1)
+        else:
+            rgb = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+
         semantic_label = F.one_hot(data["semantic_0"][:, :, :, 0].type(torch.LongTensor), 8).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
         bev_semantic_label = F.one_hot(torch.rot90(data["bev_semantic"], 3, [1, 2])[:, :, :, 0].type(torch.LongTensor), 6).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
         depth_label = (data["depth_0"][:, :, :, 0]/255).contiguous().to(self.device, dtype=torch.float32)
