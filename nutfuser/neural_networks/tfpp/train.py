@@ -896,9 +896,12 @@ class Engine(object):
                 command = None
                 ego_vel = None
 
-            rgb_a = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
-            rgb_b = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
-            rgb = torch.concatenate([rgb_a, rgb_b], dim=1)
+            if self.config.use_flow:
+                rgb_a = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
+                rgb_b = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
+                rgb = torch.concatenate([rgb_a, rgb_b], dim=1)
+            else:
+                rgb = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
             lidar = torch.from_numpy(data["bev_lidar"])[None, :][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
 
             pred_wp,\
