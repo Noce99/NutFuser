@@ -105,9 +105,7 @@ class HumanAgentWithModel(AutonomousAgent):
         self.device = torch.device(f'cuda:{0}')
 
         # Let's load the Neural Network
-        backbone = "/home/enrico/Projects/Carla/NutFuser/train_logs/test_my_data_30_04_2024_15:56:39/model_0030.pth"
-        full_net = "/home/enrico/Projects/Carla/NutFuser/train_logs/test_my_data_01_05_2024_17:52:10/model_0030.pth"
-        weight_path = full_net
+        weight_path = path_to_conf_file
         self.model, self.predicting_flow, self.just_a_backbone, self.tfpp_original = utils.load_model_given_weights(weight_path)
         self.model.eval()
         # END NUT
@@ -151,14 +149,9 @@ class HumanAgentWithModel(AutonomousAgent):
         return sensors
 
     def run_step(self, input_data, timestamp):
-        """
-        Execute one step of navigation.
-        """
-
-        # NUT
         if self.waypoint_tqdm_bar is None:
             self.waypoint_tqdm_bar = tqdm(total=len(self._global_plan_world_coord))
-            self.waypoint_tqdm_bar.update(1)
+            # self.waypoint_tqdm_bar.update(1)
                 # Execute one step of navigation.
         
         # @@@@@@@@@@@@@@@@
@@ -183,6 +176,7 @@ class HumanAgentWithModel(AutonomousAgent):
         # Process Lidar Bev
         lidar_bev = utils.lidar_to_histogram_features(lidar_data[:, :3])[0]
         lidar_bev = np.rot90(lidar_bev)
+        
         # Process Speed
         if self.last_location is None:
             speed = np.array([0])
@@ -196,10 +190,8 @@ class HumanAgentWithModel(AutonomousAgent):
             speed = np.array([ellapsed_distance / ellapsed_time])
         # Process Waypoint Point
         if self.next_waypoint_index >= len(self._global_plan_world_coord):
-            return carla.VehicleControl()
+            self.next_waypoint_index = len(self._global_plan_world_coord) - 1
         next_waypoint_location = self._global_plan_world_coord[self.next_waypoint_index][0].location
-        print(f"next_waypoint_location = [{next_waypoint_location.x}; {next_waypoint_location.y}]")
-        print(f"car_location = [{car_location[0]}; {car_location[1]}]")
         target_point = np.array([next_waypoint_location.x - car_location[0], next_waypoint_location.y - car_location[1]])
         rotation_matrix = np.array([[np.cos(compass),     -np.sin(compass)],
                                     [np.sin(compass),      np.cos(compass)]])
@@ -213,15 +205,7 @@ class HumanAgentWithModel(AutonomousAgent):
 
         if self.last_front_image is None:
             self.last_front_image = front_image
-            return carla.VehicleControl()
-
-        # @@@@@@@@@@@@@@@@@
-        # @ SHOW THE DATA @
-        # @@@@@@@@@@@@@@@@@
-        # Show the input of the network
-        # cv2.imshow('FRONT RGB', front_image)  
-        cv2.imshow('BEV RGB', bev_rgb_image)  
-        # cv2.imshow('BEV LIDAR', lidar_bev)  
+            return carla.VehicleControl(steer=float(0), throttle=float(0), brake=float(0))
 
         # @@@@@@@@@@@@@@@@@@@@@
         # @ EXECUTE THE MODEL @
@@ -236,6 +220,7 @@ class HumanAgentWithModel(AutonomousAgent):
             rgb = rgb_a
         
         # LIDAR
+        numpy_lidar_bev = lidar_bev
         lidar_bev = torch.from_numpy(lidar_bev.copy())[None, None, :].contiguous().to(self.device, dtype=torch.float32)
         
         # TARGET POINT
@@ -262,19 +247,98 @@ class HumanAgentWithModel(AutonomousAgent):
         depth_image = utils.create_depth_comparison(predicted_depth=pred_depth)
         semantic_image = utils.create_semantic_comparison(predicted_semantic=pred_semantic)
         bev_semantic_image = utils.create_semantic_comparison(predicted_semantic=pred_bev_semantic, concatenate_vertically=False)
+
+        
         waypoints_image = utils.create_waypoints_comparison(    pred_bev_semantic=pred_bev_semantic,
                                                                 prediction_target_speed=pred_target_speed,
                                                                 prediction_waypoints=pred_waypoints,
                                                                 actual_speed=speed_for_model,
                                                                 target_point=target_point
                                                             )
+        
         if self.predicting_flow:
             flow_image = utils.create_flow_comparison(predicted_flow=pred_flow, label_flow=None)
         
+        # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+        # @ LET'S CONTROL THE VEHICLE @
+        # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@
         # Get controls from model output
-        steer, throttle, brake = self.model.control_pid(torch.flip(pred_waypoints, dims=(2, )), speed_for_model)
-        control = carla.VehicleControl(steer=float(steer), throttle=float(throttle), brake=float(brake))
+        pred_waypoints_for_pid = torch.flip(pred_waypoints, dims=(2, ))
+        steer, throttle, brake = self.model.control_pid(pred_waypoints_for_pid, speed_for_model)
 
+        # There I create some rectangles in front of the car
+        lidar_bev = np.float32(numpy_lidar_bev)
+
+        """
+        rectangle_top_left =        (   int(lidar_bev.shape[0]/2 - config.LIDAR_RECATNGLE_WIDTH/2),
+                                        int(lidar_bev.shape[1]/2 - config.LIDAR_RECTANGLE_HEIGHT))
+        rectangle_bottom_right =    (   int(lidar_bev.shape[0]/2 + config.LIDAR_RECATNGLE_WIDTH/2),
+                                        int(lidar_bev.shape[1]/2))
+
+        rectangle = lidar_bev[rectangle_top_left[1]:rectangle_bottom_right[1],
+                              rectangle_top_left[0]:rectangle_bottom_right[0]]
+
+        rectangle /= 255
+        ammount_of_obtacles_in_front = np.sum(rectangle > 0.5)
+        lidar_bev = cv2.rectangle(  lidar_bev,
+                                    rectangle_top_left,
+                                    rectangle_bottom_right,
+                                    255,
+                                    3)
+        """
+        ammount_of_obtacles_in_front = 0
+        processed_pred_waypoints = utils.process_array_and_tensor(pred_waypoints, denormalize=False, data_dims=1, channels=2, dtype=np.float32, argmax=False)
+        for i in range(processed_pred_waypoints.shape[0]):
+            wp_x = int(128-processed_pred_waypoints[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M)
+            wp_y = int(128-processed_pred_waypoints[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)
+
+            rectangle_top_left =        (   int(wp_x - 10),
+                                            int(wp_y - 10))
+            rectangle_bottom_right =    (   int(wp_x + 10),
+                                            int(wp_y + 10))
+            """
+            lidar_bev = cv2.rectangle(  lidar_bev,
+                                        rectangle_top_left,
+                                        rectangle_bottom_right,
+                                        255,
+                                        1)
+            """
+            rectangle = lidar_bev[  rectangle_top_left[1]:rectangle_bottom_right[1],
+                                    rectangle_top_left[0]:rectangle_bottom_right[0]].copy()
+            rectangle /= 255
+            ammount_of_obtacles_in_front += np.sum(rectangle > 0.5)
+
+
+        # There I use the speed prediction and I choose to follow or not it
+        the_model_want_to_brake = pred_target_speed[0][0] > 0.1
+        if the_model_want_to_brake and \
+            (
+                (ammount_of_obtacles_in_front > config.MINIMUM_AMMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_MOVING and speed[0] >= 10) 
+                or 
+                (ammount_of_obtacles_in_front > config.MINIMUM_AMMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_STOP and speed[0] < 10)
+            ): # we will stop the car
+            steer =     float(0)
+            throttle =  float(0)
+            brake =     float(1.0)
+        else:
+            steer =     float(-steer)
+            throttle =  float(throttle)
+            brake =     float(brake)
+        control = carla.VehicleControl(steer=steer, throttle=throttle, brake=brake)
+
+        # There I add the steer, throttle, brake and ammount_of_obtacles_in_front on the waypoints output image
+        cv2.putText(waypoints_image, f"[steer, throttle, brake]", (255, 180), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
+        cv2.putText(waypoints_image, f"[{float(-steer):.2f}, {float(throttle):.2f}, {float(brake):.2f}]", (255, 200), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
+        cv2.putText(waypoints_image, f"obs ammount = {ammount_of_obtacles_in_front}", (255, 220), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(255, 0, 255), thickness=2, lineType=cv2.LINE_AA)
+
+
+        # @@@@@@@@@@@@@@@@@
+        # @ SHOW THE DATA @
+        # @@@@@@@@@@@@@@@@@
+        # Show the input of the network
+        cv2.imshow('FRONT RGB', front_image)  
+        cv2.imshow('BEV RGB', bev_rgb_image)  
+        cv2.imshow('BEV LIDAR', lidar_bev)  
 
         # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
         # @ SHOW THE OUTPUT OF THE NETWORK @
@@ -325,32 +389,8 @@ class KeyboardControl(object):
         self._steer_cache = 0.0
         self._clock = pygame.time.Clock()
 
-        # Get the mode
-        if path_to_conf_file:
-
-            with (open(path_to_conf_file, "r")) as f:
-                lines = f.read().split("\n")
-                self._mode = lines[0].split(" ")[1]
-                self._endpoint = lines[1].split(" ")[1]
-
-            # Get the needed vars
-            if self._mode == "log":
-                self._log_data = {'records': []}
-
-            elif self._mode == "playback":
-                self._index = 0
-                self._control_list = []
-
-                with open(self._endpoint) as fd:
-                    try:
-                        self._records = json.load(fd)
-                        self._json_to_control()
-                    except ValueError:
-                        # Moving to Python 3.5+ this can be replaced with json.JSONDecodeError
-                        pass
-        else:
-            self._mode = "normal"
-            self._endpoint = None
+        self._mode = "normal"
+        self._endpoint = None
 
     def _json_to_control(self):
         """

@@ -42,9 +42,7 @@ class NutfuserAutonomousAgent(AutonomousAgent):
         self.device = torch.device(f'cuda:{0}')
 
         # Let's load the Neural Network
-        backbone = "/home/enrico/Projects/Carla/NutFuser/train_logs/test_my_data_30_04_2024_15:56:39/model_0030.pth"
-        full_net = "/home/enrico/Projects/Carla/NutFuser/train_logs/test_my_data_01_05_2024_17:52:10/model_0030.pth"
-        weight_path = full_net
+        weight_path = path_to_conf_file
         self.model, self.predicting_flow, self.just_a_backbone, self.tfpp_original = utils.load_model_given_weights(weight_path)
         self.model.eval()
 
@@ -210,6 +208,7 @@ class NutfuserAutonomousAgent(AutonomousAgent):
                                                                 actual_speed=speed_for_model,
                                                                 target_point=target_point
                                                             )
+        
         if self.predicting_flow:
             flow_image = utils.create_flow_comparison(predicted_flow=pred_flow, label_flow=None)
         
@@ -221,7 +220,10 @@ class NutfuserAutonomousAgent(AutonomousAgent):
         steer, throttle, brake = self.model.control_pid(pred_waypoints_for_pid, speed_for_model)
 
         # There I create some rectangles in front of the car
-        lidar_bev = np.float32(numpy_lidar_bev)
+        lidar_bev_image = np.zeros((numpy_lidar_bev.shape[0], numpy_lidar_bev.shape[1], 3), np.float32)
+        lidar_bev_image[:, :, 0] = numpy_lidar_bev/255
+        lidar_bev_image[:, :, 1] = numpy_lidar_bev/255
+        lidar_bev_image[:, :, 2] = numpy_lidar_bev/255
 
         """
         rectangle_top_left =        (   int(lidar_bev.shape[0]/2 - config.LIDAR_RECATNGLE_WIDTH/2),
@@ -250,28 +252,40 @@ class NutfuserAutonomousAgent(AutonomousAgent):
                                             int(wp_y - 10))
             rectangle_bottom_right =    (   int(wp_x + 10),
                                             int(wp_y + 10))
-            """
-            lidar_bev = cv2.rectangle(  lidar_bev,
-                                        rectangle_top_left,
-                                        rectangle_bottom_right,
-                                        255,
-                                        1)
-            """
-            rectangle = lidar_bev[  rectangle_top_left[1]:rectangle_bottom_right[1],
-                                    rectangle_top_left[0]:rectangle_bottom_right[0]]
-            rectangle /= 255
+            
+            lidar_bev_image = cv2.rectangle(    lidar_bev_image,
+                                                rectangle_top_left,
+                                                rectangle_bottom_right,
+                                                (255, 0, 0),
+                                                1)
+            
+            rectangle = numpy_lidar_bev[    rectangle_top_left[1]:rectangle_bottom_right[1],
+                                            rectangle_top_left[0]:rectangle_bottom_right[0]].copy() / 255
             ammount_of_obtacles_in_front += np.sum(rectangle > 0.5)
 
 
         # There I use the speed prediction and I choose to follow or not it
-        vel_indx = torch.argmax(pred_target_speed[0], 0)
-        if vel_indx == 0 and ammount_of_obtacles_in_front > config.MINIMUM_AMMOUNT_OF_OBSTACLES_IN_FRONT: # the car want to stop
-            control = carla.VehicleControl(steer=float(0), throttle=float(0), brake=float(1.0))
+        the_model_want_to_brake = pred_target_speed[0][0] > 0.1
+        if the_model_want_to_brake and \
+            (
+                (ammount_of_obtacles_in_front > config.MINIMUM_AMMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_MOVING and speed[0] >= 10) 
+                or 
+                (ammount_of_obtacles_in_front > config.MINIMUM_AMMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_STOP and speed[0] < 10)
+            ): # we will stop the car
+            steer =     float(0)
+            throttle =  float(0)
+            brake =     float(1.0)
         else:
-            control = carla.VehicleControl(steer=float(-steer), throttle=float(throttle), brake=float(brake))
-        
-        
-        # control = carla.VehicleControl(steer=float(-steer), throttle=float(throttle), brake=float(brake))
+            steer =     float(-steer)
+            throttle =  float(throttle)
+            brake =     float(brake)
+        control = carla.VehicleControl(steer=steer, throttle=throttle, brake=brake)
+
+        # There I add the steer, throttle, brake and ammount_of_obtacles_in_front on the waypoints output image
+        cv2.putText(waypoints_image, f"[steer, throttle, brake]", (255, 180), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
+        cv2.putText(waypoints_image, f"[{float(-steer):.2f}, {float(throttle):.2f}, {float(brake):.2f}]", (255, 200), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
+        cv2.putText(waypoints_image, f"obs ammount = {ammount_of_obtacles_in_front}", (255, 220), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(255, 0, 255), thickness=2, lineType=cv2.LINE_AA)
+
 
         # @@@@@@@@@@@@@@@@@
         # @ SHOW THE DATA @
@@ -279,7 +293,7 @@ class NutfuserAutonomousAgent(AutonomousAgent):
         # Show the input of the network
         cv2.imshow('FRONT RGB', front_image)  
         cv2.imshow('BEV RGB', bev_rgb_image)  
-        cv2.imshow('BEV LIDAR', lidar_bev)  
+        cv2.imshow('BEV LIDAR', lidar_bev_image)  
 
         # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
         # @ SHOW THE OUTPUT OF THE NETWORK @
