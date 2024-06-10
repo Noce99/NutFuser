@@ -20,6 +20,7 @@ from nutfuser import utils
 from nutfuser import config
 from tqdm import tqdm
 import torch
+import math
 
 class NutfuserAutonomousAgent(AutonomousAgent):
 
@@ -30,7 +31,7 @@ class NutfuserAutonomousAgent(AutonomousAgent):
     _agent = None
     _route_assigned = False
 
-    def setup(self, path_to_conf_file):
+    def setup(self, path_to_conf_file, show_images=False):
         """
         Setup the agent parameters
         """
@@ -46,6 +47,7 @@ class NutfuserAutonomousAgent(AutonomousAgent):
         self.model, self.predicting_flow, self.just_a_backbone, self.tfpp_original = utils.load_model_given_weights(weight_path)
         self.model.eval()
 
+        self.show_images = show_images
 
     def sensors(self):
         """
@@ -197,20 +199,21 @@ class NutfuserAutonomousAgent(AutonomousAgent):
            pred_flow = predictions[-1]
         
         # Get Images from Model Output
-        depth_image = utils.create_depth_comparison(predicted_depth=pred_depth)
-        semantic_image = utils.create_semantic_comparison(predicted_semantic=pred_semantic)
-        bev_semantic_image = utils.create_semantic_comparison(predicted_semantic=pred_bev_semantic, concatenate_vertically=False)
+        if self.show_images:
+            depth_image = utils.create_depth_comparison(predicted_depth=pred_depth)
+            semantic_image = utils.create_semantic_comparison(predicted_semantic=pred_semantic)
+            bev_semantic_image = utils.create_semantic_comparison(predicted_semantic=pred_bev_semantic, concatenate_vertically=False)
 
-        
-        waypoints_image = utils.create_waypoints_comparison(    pred_bev_semantic=pred_bev_semantic,
-                                                                prediction_target_speed=pred_target_speed,
-                                                                prediction_waypoints=pred_waypoints,
-                                                                actual_speed=speed_for_model,
-                                                                target_point=target_point
-                                                            )
-        
-        if self.predicting_flow:
-            flow_image = utils.create_flow_comparison(predicted_flow=pred_flow, label_flow=None)
+            
+            waypoints_image = utils.create_waypoints_comparison(    pred_bev_semantic=pred_bev_semantic,
+                                                                    prediction_target_speed=pred_target_speed,
+                                                                    prediction_waypoints=pred_waypoints,
+                                                                    actual_speed=speed_for_model,
+                                                                    target_point=target_point
+                                                                )
+            
+            if self.predicting_flow:
+                flow_image = utils.create_flow_comparison(predicted_flow=pred_flow, label_flow=None)
         
         # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@
         # @ LET'S CONTROL THE VEHICLE @
@@ -220,10 +223,11 @@ class NutfuserAutonomousAgent(AutonomousAgent):
         steer, throttle, brake = self.model.control_pid(pred_waypoints_for_pid, speed_for_model)
 
         # There I create some rectangles in front of the car
-        lidar_bev_image = np.zeros((numpy_lidar_bev.shape[0], numpy_lidar_bev.shape[1], 3), np.float32)
-        lidar_bev_image[:, :, 0] = numpy_lidar_bev/255
-        lidar_bev_image[:, :, 1] = numpy_lidar_bev/255
-        lidar_bev_image[:, :, 2] = numpy_lidar_bev/255
+        if self.show_images:
+            lidar_bev_image = np.zeros((numpy_lidar_bev.shape[0], numpy_lidar_bev.shape[1], 3), np.float32)
+            lidar_bev_image[:, :, 0] = numpy_lidar_bev/255
+            lidar_bev_image[:, :, 1] = numpy_lidar_bev/255
+            lidar_bev_image[:, :, 2] = numpy_lidar_bev/255
 
         """
         rectangle_top_left =        (   int(lidar_bev.shape[0]/2 - config.LIDAR_RECATNGLE_WIDTH/2),
@@ -245,6 +249,8 @@ class NutfuserAutonomousAgent(AutonomousAgent):
         ammount_of_obtacles_in_front = 0
         processed_pred_waypoints = utils.process_array_and_tensor(pred_waypoints, denormalize=False, data_dims=1, channels=2, dtype=np.float32, argmax=False)
         for i in range(processed_pred_waypoints.shape[0]):
+            if math.isnan(processed_pred_waypoints[i, 0]) or math.isnan(processed_pred_waypoints[i, 1]):
+                continue
             wp_x = int(128-processed_pred_waypoints[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M)
             wp_y = int(128-processed_pred_waypoints[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)
 
@@ -252,12 +258,12 @@ class NutfuserAutonomousAgent(AutonomousAgent):
                                             int(wp_y - 10))
             rectangle_bottom_right =    (   int(wp_x + 10),
                                             int(wp_y + 10))
-            
-            lidar_bev_image = cv2.rectangle(    lidar_bev_image,
-                                                rectangle_top_left,
-                                                rectangle_bottom_right,
-                                                (255, 0, 0),
-                                                1)
+            if self.show_images:
+                lidar_bev_image = cv2.rectangle(    lidar_bev_image,
+                                                    rectangle_top_left,
+                                                    rectangle_bottom_right,
+                                                    (255, 0, 0),
+                                                    1)
             
             rectangle = numpy_lidar_bev[    rectangle_top_left[1]:rectangle_bottom_right[1],
                                             rectangle_top_left[0]:rectangle_bottom_right[0]].copy() / 255
@@ -282,30 +288,33 @@ class NutfuserAutonomousAgent(AutonomousAgent):
         control = carla.VehicleControl(steer=steer, throttle=throttle, brake=brake)
 
         # There I add the steer, throttle, brake and ammount_of_obtacles_in_front on the waypoints output image
-        cv2.putText(waypoints_image, f"[steer, throttle, brake]", (255, 180), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
-        cv2.putText(waypoints_image, f"[{float(-steer):.2f}, {float(throttle):.2f}, {float(brake):.2f}]", (255, 200), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
-        cv2.putText(waypoints_image, f"obs ammount = {ammount_of_obtacles_in_front}", (255, 220), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(255, 0, 255), thickness=2, lineType=cv2.LINE_AA)
+        if self.show_images:
+            cv2.putText(waypoints_image, f"[steer, throttle, brake]", (255, 180), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
+            cv2.putText(waypoints_image, f"[{float(-steer):.2f}, {float(throttle):.2f}, {float(brake):.2f}]", (255, 200), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
+            cv2.putText(waypoints_image, f"obs ammount = {ammount_of_obtacles_in_front}", (255, 220), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(255, 0, 255), thickness=2, lineType=cv2.LINE_AA)
 
 
         # @@@@@@@@@@@@@@@@@
         # @ SHOW THE DATA @
         # @@@@@@@@@@@@@@@@@
         # Show the input of the network
-        cv2.imshow('FRONT RGB', front_image)  
-        cv2.imshow('BEV RGB', bev_rgb_image)  
-        cv2.imshow('BEV LIDAR', lidar_bev_image)  
+        if self.show_images:
+            cv2.imshow('FRONT RGB', front_image)  
+            cv2.imshow('BEV RGB', bev_rgb_image)  
+            cv2.imshow('BEV LIDAR', lidar_bev_image)  
 
         # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
         # @ SHOW THE OUTPUT OF THE NETWORK @
         # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-        # cv2.imshow('FRONT SEMANTIC', semantic_image)  
-        # cv2.imshow('BEV SEMANTIC', bev_semantic_image)  
-        # cv2.imshow('FRONT DEPTH', depth_image)
-        cv2.imshow('WAYPOINTS', waypoints_image)
-        if self.predicting_flow:
-            # cv2.imshow('FRONT FLOW', flow_image)
-            pass
-        cv2.waitKey(10) 
+        if self.show_images:
+            # cv2.imshow('FRONT SEMANTIC', semantic_image)  
+            # cv2.imshow('BEV SEMANTIC', bev_semantic_image)  
+            # cv2.imshow('FRONT DEPTH', depth_image)
+            cv2.imshow('WAYPOINTS', waypoints_image)
+            if self.predicting_flow:
+                cv2.imshow('FRONT FLOW', flow_image)
+                pass
+            cv2.waitKey(10) 
 
 
         # @@@@@@@@@@@@@@@@@@@@@@
@@ -319,6 +328,7 @@ class NutfuserAutonomousAgent(AutonomousAgent):
     
     def destroy(self):
         print("Destroying NutfuserAutonomousAgent!")
-        cv2.destroyAllWindows() 
+        if self.show_images:
+            cv2.destroyAllWindows() 
         self.waypoint_tqdm_bar.close()
 
