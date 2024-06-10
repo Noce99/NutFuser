@@ -8,6 +8,7 @@ import psutil
 from tqdm import tqdm
 
 from nutfuser.data_creation.generate_traffic import generate_traffic
+import scenario_runner
 from nutfuser import utils
 from nutfuser import config
 
@@ -138,4 +139,21 @@ def set_up_traffic_manager_saifly_and_wait_till_its_up(carla_ip, rpc_port, tm_po
             return True, False, you_can_tick, traffic_manager_is_up, set_up_traffic_manager_process   # Means Traffic Manager Crashed!
         if traffic_manager_is_up.is_set():
             return True, True, you_can_tick, traffic_manager_is_up, set_up_traffic_manager_process     # Means everything good!
-        
+
+def launch_scenario_runner_saifly_and_wait_till_its_up(scenario_runner_pid, carla_server_pid, args_list, scenario_runner_is_done):
+    scenario_runner_is_up = multiprocessing.Event()
+    launch_scenario_runner_process = multiprocessing.Process(target=scenario_runner.main, args=(args_list, scenario_runner_is_up, scenario_runner_is_done))
+    launch_scenario_runner_process.start()
+
+    scenario_runner_pid.value = launch_scenario_runner_process.pid
+
+    while True:
+        if not psutil.pid_exists(carla_server_pid.value):
+            launch_scenario_runner_process.kill()
+            return False, True, launch_scenario_runner_process    # Means Carla Crashed!
+        if not launch_scenario_runner_process.is_alive():
+            launch_scenario_runner_process.join()
+            os.kill(carla_server_pid.value, signal.SIGKILL)
+            return True, False, launch_scenario_runner_process    # Means Scenario Runner Crashed!
+        if scenario_runner_is_up.is_set():
+            return True, True,  launch_scenario_runner_process    # Means everything good!
