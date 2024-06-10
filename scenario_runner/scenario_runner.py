@@ -387,7 +387,7 @@ class ScenarioRunner(object):
         if self._args.agent:
             agent_class_name = self.module_agent.__name__.title().replace('_', '')
             try:
-                self.agent_instance = getattr(self.module_agent, agent_class_name)(self._args.agentConfig)
+                self.agent_instance = getattr(self.module_agent, agent_class_name)(self._args.agentConfig, self._args.show_images)
                 config.agent = self.agent_instance
             except Exception as e:          # pylint: disable=broad-except
                 traceback.print_exc()
@@ -561,7 +561,7 @@ class ScenarioRunner(object):
         return result
 
 
-def main():
+def main(argument_list=None, scenario_runner_is_up=None, scenario_runner_is_done=None):
     """
     main function
     """
@@ -617,7 +617,9 @@ def main():
     parser.add_argument('--repetitions', default=1, type=int, help='Number of scenario executions')
     parser.add_argument('--waitForEgo', action="store_true", help='Connect the scenario to an existing ego vehicle')
 
-    arguments = parser.parse_args()
+    parser.add_argument('--show_images', action="store_true", help='Show the images while evaluating')
+
+    arguments = parser.parse_args(args=argument_list)
     # pylint: enable=line-too-long
 
     OSC2Helper.wait_for_ego = arguments.waitForEgo
@@ -655,7 +657,10 @@ def main():
     result = True
     try:
         scenario_runner = ScenarioRunner(arguments)
+        if scenario_runner_is_up is not None:
+            scenario_runner_is_up.set()
         result = scenario_runner.run()
+        scenario_runner_is_done.set()
     except Exception:   # pylint: disable=broad-except
         traceback.print_exc()
 
