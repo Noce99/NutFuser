@@ -3,7 +3,8 @@ import numpy as np
 import math
 import cv2
 import os
-import torch 
+import torch
+import xml.etree.ElementTree as ET
 
 from tqdm import tqdm
 from datetime import datetime
@@ -610,3 +611,36 @@ def load_model_given_weights(weights_path):
         raise NutException(color_error_string(f"Weight in '{weights_path}' not compatible with the model!"))
     
     return model, predicting_flow, just_a_backbone, tfpp_original
+
+def indent(elem, level=0):
+    i = "\n" + level*"  "
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + "  "
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+        for elem in elem:
+            indent(elem, level+1)
+        if not elem.tail or not elem.tail.strip():
+            elem.tail = i
+    else:
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
+
+def unify_routes_xml(xmls_folder_path):
+    routes = ET.Element("routes")
+
+    xml_files = os.listdir(xmls_folder_path)
+    if "evaluation.xml" in xml_files:
+        xml_files.remove("evaluation.xml")
+    
+    for file in xml_files:
+        single_route_tree = ET.parse(os.path.join(xmls_folder_path, file))
+        single_route = single_route_tree.getroot().getchildren()[0]
+        routes.append(single_route)
+
+    tree = ET.ElementTree(routes)
+    indent(routes)
+    tree.write(os.path.join(xmls_folder_path, f"evaluation.xml"))
+
+
