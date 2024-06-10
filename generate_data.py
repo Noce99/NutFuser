@@ -8,9 +8,10 @@ import psutil
 from ctypes import c_int
 from tabulate import tabulate
 
-from nutfuser.data_creation import take_data_without_records
+from nutfuser.data_creation import take_data_without_records, take_data_just_position_for_evaluation
 from nutfuser import utils
 from nutfuser import config
+from datetime import datetime
 from nutfuser.carla_interface.run_carla import  check_integrity_of_carla_path, \
                                                 launch_carla_server_saifly_and_wait_till_its_up, \
                                                 set_up_world_saifly_and_wait_till_its_setted_up, \
@@ -81,6 +82,13 @@ def get_arguments():
         type=int
     )
     argparser.add_argument(
+        '--num_of_evaluation_routes',
+        help='Number of evaluation routes to take! (default: 10)',
+        required=False,
+        default=10,
+        type=int
+    )
+    argparser.add_argument(
         '--wait_carla_for',
         help='How many seconds wait for Carla! (default: 100)',
         required=False,
@@ -92,6 +100,13 @@ def get_arguments():
         help=f'Where to save the data! (default: {os.path.join(pathlib.Path(__file__).parent.resolve(), "datasets")})',
         required=False,
         default=os.path.join(pathlib.Path(__file__).parent.resolve(), "datasets"),
+        type=str
+    )
+    argparser.add_argument(
+        '--evaluation_route_path',
+        help=f'Where to save the generated route! (default: {os.path.join(pathlib.Path(__file__).parent.resolve(), "evaluation_routes")})',
+        required=False,
+        default=os.path.join(pathlib.Path(__file__).parent.resolve(), "evaluation_routes"),
         type=str
     )
     argparser.add_argument(
@@ -107,6 +122,16 @@ def get_arguments():
     argparser.add_argument(
         '--original_transfuser',
         help=f'Set if we want to create rgb and lidar data with the original transfuser parameters!',
+        action='store_true'
+    )
+    argparser.add_argument(
+        '--just_take_positions_for_evaluation',
+        help=f'Just take the position data used for creating evaluation routes',
+        action='store_true'
+    )
+    argparser.add_argument(
+        '--show_rgb_for_evaluation',
+        help=f'If you want to see the rgb images while creating the evaluation routes',
         action='store_true'
     )
     args = argparser.parse_args()
@@ -197,34 +222,61 @@ def run_all(args):
     data_creation_pid = multiprocessing.Value(c_int)
     ego_vehicle_found_event = multiprocessing.Event()
     finished_taking_data_event = multiprocessing.Event()
-    data_creation_process = multiprocessing.Process(target=take_data_without_records.take_data_backbone,
-                                                    args=(egg_file_path, args.town, args.rpc_port, args.job_id,
-                                                          ego_vehicle_found_event, finished_taking_data_event,
-                                                          you_can_tick, args.num_of_frames, datasets_path,
-                                                          args.back_camera, args.lateral_cameras, args.original_transfuser))
-    data_creation_process.start()
-    data_creation_pid.value = data_creation_process.pid
-    pids_to_be_killed.append(data_creation_pid.value)
+    if args.just_take_positions_for_evaluation:
+        data_creation_process = multiprocessing.Process(target=take_data_just_position_for_evaluation.take_data_just_position_for_evaluation,
+                                                        args=(egg_file_path, args.town, args.rpc_port, args.job_id,
+                                                            ego_vehicle_found_event, finished_taking_data_event,
+                                                            you_can_tick, args.num_of_frames, args.evaluation_route_path, args.show_rgb_for_evaluation))
+        data_creation_process.start()
+        data_creation_pid.value = data_creation_process.pid
+        pids_to_be_killed.append(data_creation_pid.value)
+
+        print(utils.get_a_title(f"STARTING TO TAKE DATA [{args.num_of_frames}]", color="green"))
+        start_time = time.time()
+        while True:
+            if not psutil.pid_exists(carla_server_pid.value):
+                #kill_all(carla_server_pid, traffic_manager_pid, data_creation_pid)
+                raise utils.NutException(utils.color_error_string(f"Carla crashed!"))
+            if not set_up_traffic_manager_process.is_alive():
+                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                raise utils.NutException(utils.color_error_string(f"Traffic Manager crashed!"))
+            if not data_creation_process.is_alive():
+                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                raise utils.NutException(utils.color_error_string(f"Data Creation crashed!"))
+            if not ego_vehicle_found_event.is_set() and time.time()-start_time > 10:
+                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                raise utils.NutException(utils.color_error_string(f"Data Creation is not able to find out the Ego Vehicle!"))
+            if finished_taking_data_event.is_set():
+                break
+    else:
+        data_creation_process = multiprocessing.Process(target=take_data_without_records.take_data_backbone,
+                                                        args=(egg_file_path, args.town, args.rpc_port, args.job_id,
+                                                            ego_vehicle_found_event, finished_taking_data_event,
+                                                            you_can_tick, args.num_of_frames, datasets_path,
+                                                            args.back_camera, args.lateral_cameras, args.original_transfuser))
+        data_creation_process.start()
+        data_creation_pid.value = data_creation_process.pid
+        pids_to_be_killed.append(data_creation_pid.value)
 
 
-    print(utils.get_a_title(f"STARTING TO TAKE DATA [{args.num_of_frames}]", color="green"))
-    start_time = time.time()
-    while True:
-        if not psutil.pid_exists(carla_server_pid.value):
-            #kill_all(carla_server_pid, traffic_manager_pid, data_creation_pid)
-            raise utils.NutException(utils.color_error_string(f"Carla crashed!"))
-        if not set_up_traffic_manager_process.is_alive():
-            #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
-            raise utils.NutException(utils.color_error_string(f"Traffic Manager crashed!"))
-        if not data_creation_process.is_alive():
-            #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
-            raise utils.NutException(utils.color_error_string(f"Data Creation crashed!"))
-        if not ego_vehicle_found_event.is_set() and time.time()-start_time > 10:
-            #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
-            raise utils.NutException(utils.color_error_string(f"Data Creation is not able to find out the Ego Vehicle!"))
-        if finished_taking_data_event.is_set():
-            break
-    
+        print(utils.get_a_title(f"STARTING TO TAKE DATA [{args.num_of_frames}]", color="green"))
+        start_time = time.time()
+        while True:
+            if not psutil.pid_exists(carla_server_pid.value):
+                #kill_all(carla_server_pid, traffic_manager_pid, data_creation_pid)
+                raise utils.NutException(utils.color_error_string(f"Carla crashed!"))
+            if not set_up_traffic_manager_process.is_alive():
+                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                raise utils.NutException(utils.color_error_string(f"Traffic Manager crashed!"))
+            if not data_creation_process.is_alive():
+                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                raise utils.NutException(utils.color_error_string(f"Data Creation crashed!"))
+            if not ego_vehicle_found_event.is_set() and time.time()-start_time > 10:
+                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                raise utils.NutException(utils.color_error_string(f"Data Creation is not able to find out the Ego Vehicle!"))
+            if finished_taking_data_event.is_set():
+                break
+        
     print(utils.get_a_title(f"FINISHED TO TAKE DATA [{args.num_of_frames}]", color="green"))
 
     # (6) CLEANING EVERYTHING
@@ -248,11 +300,32 @@ if __name__ == "__main__":
     traffic_manager_log_path = os.path.join(nutfuser_folder_path, "logs", f"traffic_manager_logs_{args.job_id}.log")
     datasets_path = args.dataset_path
 
-    if not os.path.isdir(datasets_path):
-        try:
-            os.mkdir(datasets_path)
-        except:
-            Exception(utils.color_error_string(f"Unable to create [{datasets_path}] dir!"))
+    if args.just_take_positions_for_evaluation:
+
+        if not os.path.isdir(args.evaluation_route_path):
+            try:
+                os.mkdir(args.evaluation_route_path)
+            except:
+                Exception(utils.color_error_string(f"Unable to create [{args.evaluation_route_path}] dir!"))
+
+        now = datetime.now()
+        current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
+        where_to_save = os.path.join(args.evaluation_route_path, f"{config.TOWN_DICT[args.town]}_{current_time}")
+        
+        if not os.path.isdir(where_to_save):
+            try:
+                os.mkdir(where_to_save)
+            except:
+                Exception(utils.color_error_string(f"Unable to create [{where_to_save}] dir!"))
+        
+        args.evaluation_route_path = where_to_save
+    else:
+
+        if not os.path.isdir(datasets_path):
+            try:
+                os.mkdir(datasets_path)
+            except:
+                Exception(utils.color_error_string(f"Unable to create [{datasets_path}] dir!"))
 
     a_table_head = ["Argument", "Value"]
     a_table = []
@@ -260,27 +333,42 @@ if __name__ == "__main__":
         a_table.append([arg, getattr(args, arg)])
     print(tabulate(a_table, headers=a_table_head, tablefmt="grid"))
 
-    # LET'S RUN ALL
-    for i in range(config.MAX_NUM_OF_ATTEMPS):
-        try:
-            print(utils.get_a_title(f"ATTEMPT [{i+1}/{config.MAX_NUM_OF_ATTEMPS}]", "blue"))
-            if run_all(args):
-                break
-        except utils.NutException as e:
-            print(e.message)
-            args.rpc_port += 1
-            for pid in pids_to_be_killed:
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                except:
-                    pass
-            pids_to_be_killed = []
-        except KeyboardInterrupt:
-            for pid in pids_to_be_killed:
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                except:
-                    pass
-            exit()
+    if args.just_take_positions_for_evaluation:
+        times_that_i_need_to_take_data = args.num_of_evaluation_routes
+    else:
+        times_that_i_need_to_take_data = 1
+    
+    for k in range(times_that_i_need_to_take_data):
+        if times_that_i_need_to_take_data > 1:
+            to_print = f"# Taking Data Loop number {k+1}/{times_that_i_need_to_take_data} #"
+            print(utils.color_info_string("#"*len(to_print)))
+            print(utils.color_info_string(to_print))
+            print(utils.color_info_string("#"*len(to_print)))
+            args.job_id = k
+        # LET'S RUN ALL
+        for i in range(config.MAX_NUM_OF_ATTEMPS):
+            try:
+                print(utils.get_a_title(f"ATTEMPT [{i+1}/{config.MAX_NUM_OF_ATTEMPS}]", "blue"))
+                if run_all(args):
+                    break
+            except utils.NutException as e:
+                print(e.message)
+                args.rpc_port += 1
+                for pid in pids_to_be_killed:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except:
+                        pass
+                pids_to_be_killed = []
+            except KeyboardInterrupt:
+                for pid in pids_to_be_killed:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except:
+                        pass
+                exit()
+    
+    if args.just_take_positions_for_evaluation:
+        utils.unify_routes_xml(args.evaluation_route_path)
 
     
