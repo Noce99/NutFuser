@@ -1,0 +1,2 @@
+#!/bin/bash
+python ./scenario_runner/scenario_runner.py --route /home/enrico/Projects/Carla/NutFuser/evaluation_routes/Town10HD_04_06_2024_15:12:42/7_Town10HD.xml --agent ./scenario_runner/srunner/autoagents/nutfuser_autonomous_agent.py --timeout 30 --agentConfig /home/enrico/Projects/Carla/NutFuser/train_logs/full_net_flow/model_0030.pth --json --outputDir /home/enrico/Projects/Carla/NutFuser/evaluation/not_import_results --show_images
