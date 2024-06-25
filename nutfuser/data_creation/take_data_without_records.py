@@ -582,6 +582,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     # SPEEDS
     previous_speeds = [] # the speed given as input to the model
     next_speeds = [] # the ground trouth speed that the model have to predict
+    accelerations = [] # the prediction of the model regarding speed
     def get_speed(index):
         curr_x = all_carla_positions_array[index, 0]
         curr_y = all_carla_positions_array[index, 1]
@@ -616,29 +617,42 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         for i in range(-config.HOW_MANY_CARLA_FRAME_FOR_CALCULATING_SPEEDS-1, 0):
             speed = get_speed(frame_index*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE + i)
             speeds.append(speed)
-        mean_speed = sum(speeds) / len(speeds)
-        # print(f"[PREV_{frame_index}] speed = {mean_speed:.4f} m/s -> {mean_speed*3.6:.4f} km/h")
-        previous_speeds.append(mean_speed)
+        previous_speed = sum(speeds) / len(speeds)
+        # print(f"[PREV_{frame_index}] speed = {previous_speed:.4f} m/s -> {previous_speed*3.6:.4f} km/h")
+        previous_speeds.append(previous_speed)
         speeds = []
         for i in range(0, config.HOW_MANY_CARLA_FRAME_FOR_CALCULATING_SPEEDS+1, +1):
             speed = get_speed(frame_index*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE + i)
             speeds.append(speed)
-        mean_speed = sum(speeds) / len(speeds)
-        # print(f"[NEXT_{frame_index}] speed = {mean_speed:.4f} m/s -> {mean_speed*3.6:.4f} km/h")
+        next_speed = sum(speeds) / len(speeds)
+        # print(f"[NEXT_{frame_index}] speed = {next_speed:.4f} m/s -> {next_speed*3.6:.4f} km/h")
+        # CALCULATE NEXT SPEED PROBABILITY VECTOR AS IN TRANSFUSER
         next_speed_as_probability = [0., 0., 0., 0.]
-        if mean_speed < 3.0:
+        if next_speed < 3.0:
             next_speed_as_probability[0] = 1.0
-        elif mean_speed < 12.5:
+        elif next_speed < 12.5:
             next_speed_as_probability[1] = 1.0
-        elif mean_speed < 23.5:
+        elif next_speed < 23.5:
             next_speed_as_probability[2] = 1.0
         else:
             next_speed_as_probability[3] = 1.0
         next_speeds.append(next_speed_as_probability)
+        # CALCULATING ACCELERATION AS PROBABILITY
+        acceleration_as_probability = [0., 0., 0.] # DECREASING, SAME, INCREASING SPEED
+        speed_difference = next_speed - previous_speed
+        # TO DO!!!!!!!!!!!!!!!
+        if abs(speed_difference) < 0.1:  # IT'S A RANDOM NUMBER
+            acceleration_as_probability[1] = 1.0
+        elif speed_difference < 0.:
+            acceleration_as_probability[0] = 1.0
+        elif speed_difference > 0.:
+            acceleration_as_probability[2] = 1.0
+        accelerations.append(acceleration_as_probability)
     previous_speeds_array = np.array(previous_speeds)
     next_speeds_array = np.array(next_speeds)
+    acceleration_array = np.array(accelerations)
     # we save the speed data
     np.save(os.path.join(os.path.join(where_to_save), "previous_speeds.npy"), previous_speeds_array)
     np.save(os.path.join(os.path.join(where_to_save), "next_speeds.npy"), next_speeds_array)
-
+    np.save(os.path.join(os.path.join(where_to_save), "accelerations.npy"), acceleration_array)  # TO BE TESTED
     finished_taking_data_event.set()
