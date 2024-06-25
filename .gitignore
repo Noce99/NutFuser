@@ -268,3 +268,13 @@ fabric.properties
 
 # Android studio 3.1+ serialized cache file
 .idea/caches/build_file_checksums.ser
+
+# Added by Noce
+
+.idea/misc.xml
+.idea/modules.xml
+.idea/NutFuser.iml
+.idea/inspectionProfiles/profiles_settings.xml
+.idea/vcs.xml
+.idea/.gitignore
+
