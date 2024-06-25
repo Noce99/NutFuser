@@ -160,3 +160,146 @@ def draw_lane_marking_single_side(
             draw_solid_line(surface, markings[1], False, markings[2], 1)
         elif markings[0] == carla.LaneMarkingType.Broken:
             draw_broken_line(surface, markings[1], False, markings[2], 1)
+
+
+def nut_lanes_draw(passable_line, unpassable_line, waypoints, location_to_pixel_func, color, map):
+    """
+    road_ids = []
+    lane_ids = []
+    section_ids = []
+    for el in waypoints:
+        if el.road_id not in road_ids:
+            road_ids.append(el.road_id)
+        if el.lane_id not in lane_ids:
+            lane_ids.append(el.lane_id)
+        if el.section_id not in section_ids:
+            section_ids.append(el.section_id)
+
+    print(f"{road_ids} {lane_ids} {section_ids}")
+    """
+    if not waypoints[0].is_junction:
+
+        list_of_waypoints_in_pixels_coord_left = [
+            location_to_pixel_func(lateral_shift(w.transform, -1 * w.lane_width * 0.5))
+            for w in waypoints
+        ]
+        list_of_waypoints_in_pixels_coord_right = [
+            location_to_pixel_func(lateral_shift(w.transform, 1 * w.lane_width * 0.5))
+            for w in waypoints
+        ]
+        if waypoints[0].left_lane_marking.type == carla.LaneMarkingType.Broken:
+            draw_solid_line(passable_line, color, False, list_of_waypoints_in_pixels_coord_left, 3)
+        else:
+            draw_solid_line(unpassable_line, color, False, list_of_waypoints_in_pixels_coord_left, 3)
+        if waypoints[0].right_lane_marking.type == carla.LaneMarkingType.Broken:
+            draw_solid_line(passable_line, color, False, list_of_waypoints_in_pixels_coord_right, 3)
+        else:
+            draw_solid_line(unpassable_line, color, False, list_of_waypoints_in_pixels_coord_right, 3)
+
+    else:
+
+        """
+        road_id = waypoints[0].road_id
+        lane_id = waypoints[0].lane_id
+        get_if_there_is_a_lane_on_the_right = map.get_waypoint_xodr(road_id, lane_id-1, 0.0)
+        if get_if_there_is_a_lane_on_the_right is None or get_if_there_is_a_lane_on_the_right.lane_type != carla.LaneType.Driving :
+            list_of_waypoints_in_pixels_coord_right = [
+                location_to_pixel_func(lateral_shift(w.transform, 1 * w.lane_width * 0.5))
+                for w in waypoints
+            ]
+            if waypoints[0].right_lane_marking.type in [carla.LaneMarkingType.Solid, carla.LaneMarkingType.SolidSolid]:
+                draw_solid_line(unpassable_line, color, False, list_of_waypoints_in_pixels_coord_right, 3)
+            else:
+                draw_solid_line(passable_line, color, False, list_of_waypoints_in_pixels_coord_right, 1)
+
+        """
+        """
+        list_of_waypoints_in_pixels_coord_left = [
+            location_to_pixel_func(lateral_shift(w.transform, -1 * w.lane_width * 0.5))
+            for w in waypoints
+        ]
+        list_of_waypoints_in_pixels_coord_right = [
+            location_to_pixel_func(lateral_shift(w.transform, 1 * w.lane_width * 0.5))
+            for w in waypoints
+        ]
+
+        if waypoints[0].lane_change == carla.LaneChange.Both:
+            can_turn_right =    True
+            can_turn_left =     True
+        elif waypoints[0].lane_change == carla.LaneChange.Right:
+            can_turn_right =    True
+            can_turn_left =     False
+        elif waypoints[0].lane_change == carla.LaneChange.Left:
+            can_turn_right =    False
+            can_turn_left =     True
+        else:
+            can_turn_right =    False
+            can_turn_left =     False
+
+        if waypoints[0].left_lane_marking.type in [carla.LaneMarkingType.Solid, carla.LaneMarkingType.SolidSolid] and \
+                not can_turn_left:
+            draw_solid_line(unpassable_line, color, False, list_of_waypoints_in_pixels_coord_left, 3)
+
+        if waypoints[0].right_lane_marking.type in [carla.LaneMarkingType.Solid, carla.LaneMarkingType.SolidSolid]and \
+                not can_turn_right:
+            draw_solid_line(unpassable_line, color, False, list_of_waypoints_in_pixels_coord_right, 3)
+
+        """
+        """
+
+        junction = waypoints[0].get_junction()
+        junction_bb = junction.bounding_box
+
+        center = junction_bb.location
+        sizes = junction_bb.extent
+
+        corners = [
+            carla.Location(x=center.x-sizes.x, y=center.y-sizes.y),
+            carla.Location(x=center.x+sizes.x, y=center.y-sizes.y),
+            carla.Location(x=center.x+sizes.x, y=center.y+sizes.y),
+            carla.Location(x=center.x-sizes.x, y=center.y+sizes.y),
+        ]
+        corners = [location_to_pixel_func(loc) for loc in corners]
+
+        # cv.fillPoly(img=passable_line, pts=np.int32([corners]), color=color)
+
+        other_waypoints = junction.get_waypoints(carla.LaneType.Any)
+        for w in other_waypoints:
+            waypoints_list = w[0].next_until_lane_end(1)
+            assert w[0].lane_type == w[1].lane_type
+            if w[0].road_id != w[1].road_id:
+                print(f"{w[0].road_id} -> {w[1].road_id}")
+            if w[0].lane_type == carla.LaneType.Driving:
+                for ww in waypoints_list:
+                    center = location_to_pixel_func(ww.transform.location)
+                    cv.circle(unpassable_line, center, 3, 1, -1)
+
+        """
+        """
+        list_of_waypoints_in_pixels_coord_left = []
+        list_of_waypoints_in_pixels_coord_right = []
+        for i, w in enumerate(waypoints):
+            if i > 0:
+                previous_is_a_junction = waypoints[i-1].is_junction
+            else:
+                previous_is_a_junction = False
+            if i < len(waypoints)-1:
+                next_is_a_junction = waypoints[i+1].is_junction
+            else:
+                next_is_a_junction = False
+            if not w.is_junction or not previous_is_a_junction or not next_is_a_junction:
+                list_of_waypoints_in_pixels_coord_left.append(location_to_pixel_func(
+                    lateral_shift(w.transform, -1 * w.lane_width * 0.5)))
+                list_of_waypoints_in_pixels_coord_right.append(location_to_pixel_func(
+                    lateral_shift(w.transform, 1 * w.lane_width * 0.5)))
+
+
+        if waypoints[0].left_lane_marking.type in [carla.LaneMarkingType.Solid, carla.LaneMarkingType.SolidSolid]:
+            draw_solid_line(unpassable_line, color, False, list_of_waypoints_in_pixels_coord_left, 3)
+        else:
+            draw_solid_line(passable_line, color, False, list_of_waypoints_in_pixels_coord_left, 1)
+        if waypoints[0].right_lane_marking.type in [carla.LaneMarkingType.Solid, carla.LaneMarkingType.SolidSolid]:
+            draw_solid_line(unpassable_line, color, False, list_of_waypoints_in_pixels_coord_right, 3)
+        else:
+            draw_solid_line(passable_line, color, False, list_of_waypoints_in_pixels_coord_right, 1)
+        """

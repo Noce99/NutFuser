@@ -2,6 +2,8 @@ import carla
 import logging
 import numpy as np
 import cv2
+import pathlib
+import os
 
 from enum import IntEnum, auto, Enum
 from pathlib import Path
@@ -34,21 +36,23 @@ class BirdViewCropType(Enum):
     FRONT_AREA_ONLY = auto()  # Like in "Learning by Cheating"
 
 
-DEFAULT_HEIGHT = 336  # its 84m when density is 4px/m
-DEFAULT_WIDTH = 150  # its 37.5m when density is 4px/m
+DEFAULT_HEIGHT = 336*4  # its 84m when density is 4px/m
+DEFAULT_WIDTH = 150*4  # its 37.5m when density is 4px/m
 DEFAULT_CROP_TYPE = BirdViewCropType.FRONT_AND_REAR_AREA
 
 
 class BirdViewMasks(IntEnum):
-    PEDESTRIANS = 8
-    RED_LIGHTS = 7
-    YELLOW_LIGHTS = 6
-    GREEN_LIGHTS = 5
-    AGENT = 4
-    VEHICLES = 3
-    CENTERLINES = 2
-    LANES = 1
-    ROAD = 0
+    PEDESTRIANS =       10
+    RED_LIGHTS =        9
+    YELLOW_LIGHTS =     8
+    GREEN_LIGHTS =      7
+    AGENT =             6
+    VEHICLES =          5
+    CENTERLINES =       4
+    PASSABLE_LANES =    3
+    UNPASSABLE_LANES =  2
+    CROSSWALKS =        1
+    ROAD =              0
 
     @staticmethod
     def top_to_bottom() -> List[int]:
@@ -60,15 +64,17 @@ class BirdViewMasks(IntEnum):
 
 
 RGB_BY_MASK = {
-    BirdViewMasks.PEDESTRIANS: RGB.VIOLET,
-    BirdViewMasks.RED_LIGHTS: RGB.RED,
-    BirdViewMasks.YELLOW_LIGHTS: RGB.YELLOW,
-    BirdViewMasks.GREEN_LIGHTS: RGB.GREEN,
-    BirdViewMasks.AGENT: RGB.CHAMELEON,
-    BirdViewMasks.VEHICLES: RGB.ORANGE,
-    BirdViewMasks.CENTERLINES: RGB.CHOCOLATE,
-    BirdViewMasks.LANES: RGB.WHITE,
-    BirdViewMasks.ROAD: RGB.DIM_GRAY,
+    BirdViewMasks.PEDESTRIANS:      RGB.VIOLET,
+    BirdViewMasks.RED_LIGHTS:       RGB.RED,
+    BirdViewMasks.YELLOW_LIGHTS:    RGB.YELLOW,
+    BirdViewMasks.GREEN_LIGHTS:     RGB.GREEN,
+    BirdViewMasks.AGENT:            RGB.CHAMELEON,
+    BirdViewMasks.VEHICLES:         RGB.ORANGE,
+    BirdViewMasks.CENTERLINES:      RGB.CHOCOLATE,
+    BirdViewMasks.PASSABLE_LANES:   RGB.WHITE,
+    BirdViewMasks.UNPASSABLE_LANES: RGB.RED,
+    BirdViewMasks.CROSSWALKS:       RGB.SKY_BLUE,
+    BirdViewMasks.ROAD:             RGB.DIM_GRAY,
 }
 
 
@@ -162,31 +168,40 @@ class BirdViewProducer:
             render_lanes_on_junctions=render_lanes_on_junctions,
         )
 
-        cache_path = self.parametrized_cache_path()
-        with FileLock(f"{cache_path}.lock"):
-            if Path(cache_path).is_file():
-                LOGGER.info(f"Loading cache from {cache_path}")
-                static_cache = np.load(cache_path)
-                self.full_road_cache = static_cache[0]
-                self.full_lanes_cache = static_cache[1]
-                self.full_centerlines_cache = static_cache[2]
-                LOGGER.info(f"Loaded static layers from cache file: {cache_path}")
-            else:
-                LOGGER.warning(
-                    f"Cache file does not exist, generating cache at {cache_path}"
-                )
-                self.full_road_cache = self.masks_generator.road_mask()
-                self.full_lanes_cache = self.masks_generator.lanes_mask()
-                self.full_centerlines_cache = self.masks_generator.centerlines_mask()
-                static_cache = np.stack(
-                    [
-                        self.full_road_cache,
-                        self.full_lanes_cache,
-                        self.full_centerlines_cache,
-                    ]
-                )
-                np.save(cache_path, static_cache, allow_pickle=False)
-                LOGGER.info(f"Saved static layers to cache file: {cache_path}")
+        carla_birdeye_view = pathlib.Path(__file__).parent.resolve()
+        cache_path = os.path.join(f"{carla_birdeye_view}", f"{self.parametrized_cache_path()}")
+        if Path(cache_path).is_file():
+            LOGGER.info(f"Loading cache from {cache_path}")
+            static_cache = np.load(cache_path)
+            self.full_road_cache = static_cache[0]
+            self.full_passable_lanes_cache = static_cache[1]
+            self.full_unpassable_lanes_cache = static_cache[2]
+            self.full_centerlines_cache = static_cache[3]
+            self.full_crosswalks_cache = static_cache[4]
+            LOGGER.info(f"Loaded static layers from cache file: {cache_path}")
+        else:
+            LOGGER.warning(
+                f"Cache file does not exist, generating cache at {cache_path}"
+            )
+            self.full_road_cache = self.masks_generator.road_mask()
+            self.full_passable_lanes_cache, \
+                self.full_unpassable_lanes_cache = self.masks_generator.lanes_mask()
+            self.full_centerlines_cache = self.masks_generator.centerlines_mask()
+            self.full_crosswalks_cache = self.masks_generator.crosswalks_mask()
+
+            self.full_crosswalks_cache[self.full_road_cache == 0] = 0
+
+            static_cache = np.stack(
+                [
+                    self.full_road_cache,
+                    self.full_passable_lanes_cache,
+                    self.full_unpassable_lanes_cache,
+                    self.full_centerlines_cache,
+                    self.full_crosswalks_cache,
+                ]
+            )
+            np.save(cache_path, static_cache, allow_pickle=False)
+            LOGGER.info(f"Saved static layers to cache file: {cache_path}")
 
     def parametrized_cache_path(self) -> str:
         cache_dir = Path("birdview_v3_cache")
@@ -227,10 +242,16 @@ class BirdViewProducer:
         masks[BirdViewMasks.ROAD.value] = self.full_road_cache[
             cropping_rect.vslice, cropping_rect.hslice
         ]
-        masks[BirdViewMasks.LANES.value] = self.full_lanes_cache[
+        masks[BirdViewMasks.PASSABLE_LANES.value] = self.full_passable_lanes_cache[
+            cropping_rect.vslice, cropping_rect.hslice
+        ]
+        masks[BirdViewMasks.UNPASSABLE_LANES.value] = self.full_unpassable_lanes_cache[
             cropping_rect.vslice, cropping_rect.hslice
         ]
         masks[BirdViewMasks.CENTERLINES.value] = self.full_centerlines_cache[
+            cropping_rect.vslice, cropping_rect.hslice
+        ]
+        masks[BirdViewMasks.CROSSWALKS.value] = self.full_crosswalks_cache[
             cropping_rect.vslice, cropping_rect.hslice
         ]
 

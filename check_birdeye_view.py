@@ -84,7 +84,9 @@ def main():
             break
     cv2.destroyAllWindows()
 
+
 pids_to_be_killed = []
+
 
 def run_all(args):
     # (1) LAUNCH CARLA SERVER
@@ -128,6 +130,7 @@ def run_all(args):
 
     print(utils.color_info_string("(2/2)\tManual Control is UP!"))
 
+    print(utils.color_info_string("Calculating and showing bird_eye_view"))
     main()
 
 

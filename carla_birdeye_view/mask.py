@@ -226,28 +226,20 @@ class MapMaskGenerator:
                 cv2.fillPoly(img=canvas, pts=polygon, color=COLOR_ON)
         return canvas
 
-    def lanes_mask(self) -> Mask:
-        canvas = self.make_empty_mask()
-        for road_waypoints in self._each_road_waypoints:
-            if self._render_lanes_on_junctions or not road_waypoints[0].is_junction:
-                # Left Side
-                lanes.draw_lane_marking_single_side(
-                    canvas,
-                    road_waypoints,
-                    side=LaneSide.LEFT,
-                    location_to_pixel_func=self.location_to_pixel,
-                    color=COLOR_ON,
-                )
-
-                # Right Side
-                lanes.draw_lane_marking_single_side(
-                    canvas,
-                    road_waypoints,
-                    side=LaneSide.RIGHT,
-                    location_to_pixel_func=self.location_to_pixel,
-                    color=COLOR_ON,
-                )
-        return canvas
+    def lanes_mask(self) -> Tuple[Mask, Mask]:
+        passable_line = self.make_empty_mask()
+        unpassable_line = self.make_empty_mask()
+        for road_start, _ in self._topology:
+            waypoints_list = road_start.next_until_lane_end(0.1)
+            lanes.nut_lanes_draw(
+                passable_line,
+                unpassable_line,
+                waypoints_list,
+                location_to_pixel_func=self.location_to_pixel,
+                color=COLOR_ON,
+                map=self._map,
+            )
+        return passable_line, unpassable_line
 
     def centerlines_mask(self) -> Mask:
         canvas = self.make_empty_mask()
@@ -345,3 +337,10 @@ class MapMaskGenerator:
                 thickness=cv2.FILLED,
             )
         return red_light_canvas, yellow_light_canvas, green_light_canvas
+
+    def crosswalks_mask(self) -> Mask:
+        crosswalks_mask = self.make_empty_mask()
+        for i in range(0, len(self._map.get_crosswalks()), 5):
+            corners = [self.location_to_pixel(loc) for loc in self._map.get_crosswalks()[i:i+4]]
+            cv2.fillPoly(img=crosswalks_mask, pts=np.int32([corners]), color=COLOR_ON)
+        return crosswalks_mask
