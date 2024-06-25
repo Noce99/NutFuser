@@ -1,7 +1,6 @@
 import carla
 import numpy as np
-
-from cv2 import cv2 as cv
+import cv2
 from enum import IntEnum
 
 """
@@ -24,7 +23,7 @@ def lateral_shift(transform, shift):
 def draw_solid_line(canvas, color, closed, points, width):
     """Draws solid lines in a surface given a set of points, width and color"""
     if len(points) >= 2:
-        cv.polylines(
+        cv2.polylines(
             img=canvas,
             pts=np.int32([points]),
             isClosed=closed,
@@ -40,7 +39,7 @@ def draw_broken_line(canvas, color, closed, points, width):
 
     # Draw selected lines
     for line in broken_lines:
-        cv.polylines(
+        cv2.polylines(
             img=canvas,
             pts=np.int32([line]),
             isClosed=closed,

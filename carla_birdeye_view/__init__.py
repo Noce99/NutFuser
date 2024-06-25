@@ -1,7 +1,7 @@
 import carla
 import logging
 import numpy as np
-import cv2.cv2 as cv
+import cv2
 
 from enum import IntEnum, auto, Enum
 from pathlib import Path
@@ -85,13 +85,13 @@ def rotate(image, angle, center=None, scale=1.0):
         center = (w // 2, h // 2)
 
     # perform the rotation
-    M = cv.getRotationMatrix2D(center, angle, scale)
-    rotated = cv.warpAffine(
+    M = cv2.getRotationMatrix2D(center, angle, scale)
+    rotated = cv2.warpAffine(
         image,
         M,
         (w, h),
-        flags=cv.INTER_NEAREST,
-        borderMode=cv.BORDER_CONSTANT,
+        flags=cv2.INTER_NEAREST,
+        borderMode=cv2.BORDER_CONSTANT,
         borderValue=0,
     )
 
