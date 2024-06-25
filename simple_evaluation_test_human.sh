@@ -1,2 +1,2 @@
 #!/bin/bash
-python ./scenario_runner/scenario_runner.py --route ./scenario_runner/srunner/data/routes_town10_noce.xml --agent ./scenario_runner/srunner/autoagents/human_agent_with_model.py --output --timeout 30
+python ./scenario_runner/scenario_runner.py --route /home/enrico/Projects/Carla/NutFuser/evaluation_routes/Town07_04_06_2024_11:09:50/evaluation.xml --agent ./scenario_runner/srunner/autoagents/human_agent_with_model.py --timeout 30 --agentConfig /home/enrico/Projects/Carla/NutFuser/train_logs/full_net_flow/model_0030.pth --json --outputDir /home/enrico/Projects/Carla/NutFuser/evaluation 
