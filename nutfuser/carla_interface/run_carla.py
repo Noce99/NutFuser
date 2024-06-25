@@ -122,10 +122,10 @@ def set_up_world_saifly_and_wait_till_its_setted_up(carla_ip, rpc_port, town_num
                 os.kill(carla_server_pid.value, signal.SIGKILL)
                 return False
 
-def set_up_traffic_manager_saifly_and_wait_till_its_up(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_walkers, carla_server_pid, traffic_manager_pid, logs_path):
+def set_up_traffic_manager_saifly_and_wait_till_its_up(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_walkers, carla_server_pid, traffic_manager_pid, logs_path, hero=True):
     you_can_tick = multiprocessing.Event()
     traffic_manager_is_up = multiprocessing.Event()
-    set_up_traffic_manager_process = multiprocessing.Process(target=generate_traffic, args=(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_walkers, traffic_manager_is_up, you_can_tick, logs_path))
+    set_up_traffic_manager_process = multiprocessing.Process(target=generate_traffic, args=(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_walkers, traffic_manager_is_up, you_can_tick, logs_path, hero))
     set_up_traffic_manager_process.start()
 
     traffic_manager_pid.value = set_up_traffic_manager_process.pid

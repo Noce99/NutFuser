@@ -178,6 +178,7 @@ class BirdViewProducer:
             self.full_unpassable_lanes_cache = static_cache[2]
             self.full_centerlines_cache = static_cache[3]
             self.full_crosswalks_cache = static_cache[4]
+            self.full_parked_vehicle = static_cache[5]
             LOGGER.info(f"Loaded static layers from cache file: {cache_path}")
         else:
             LOGGER.warning(
@@ -188,6 +189,7 @@ class BirdViewProducer:
                 self.full_unpassable_lanes_cache = self.masks_generator.lanes_mask()
             self.full_centerlines_cache = self.masks_generator.centerlines_mask()
             self.full_crosswalks_cache = self.masks_generator.crosswalks_mask()
+            self.full_parked_vehicle = self.masks_generator.parked_vehicle_mask()
 
             self.full_crosswalks_cache[self.full_road_cache == 0] = 0
 
@@ -198,6 +200,7 @@ class BirdViewProducer:
                     self.full_unpassable_lanes_cache,
                     self.full_centerlines_cache,
                     self.full_crosswalks_cache,
+                    self.full_parked_vehicle
                 ]
             )
             np.save(cache_path, static_cache, allow_pickle=False)
@@ -254,6 +257,9 @@ class BirdViewProducer:
         masks[BirdViewMasks.CROSSWALKS.value] = self.full_crosswalks_cache[
             cropping_rect.vslice, cropping_rect.hslice
         ]
+        masks[BirdViewMasks.VEHICLES.value] = self.full_parked_vehicle[
+            cropping_rect.vslice, cropping_rect.hslice
+        ]
 
         # Dynamic masks
         rendering_window = RenderingWindow(
@@ -302,7 +308,7 @@ class BirdViewProducer:
         )
         masks[BirdViewMasks.VEHICLES.value] = self.masks_generator.vehicles_mask(
             segregated_actors.vehicles
-        )
+        ) + masks[BirdViewMasks.VEHICLES.value]
         masks[BirdViewMasks.PEDESTRIANS.value] = self.masks_generator.pedestrians_mask(
             segregated_actors.pedestrians
         )

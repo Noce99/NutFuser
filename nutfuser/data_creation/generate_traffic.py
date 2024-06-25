@@ -31,7 +31,7 @@ def get_actor_blueprints(world, filter, generation):
         print("   Warning! Actor Generation is not valid. No actor will be spawned.")
         return []
 
-def generate_traffic(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_walkers, traffic_manager_is_up, you_can_tick, logs_path):
+def generate_traffic(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_walkers, traffic_manager_is_up, you_can_tick, logs_path, hero=True):
     try:
         import carla
     except:
@@ -109,7 +109,6 @@ def generate_traffic(carla_ip, rpc_port, tm_port, number_of_vehicles, number_of_
         # Spawn vehicles
         # --------------
         batch = []
-        hero = True
         for n, transform in enumerate(spawn_points):
             if n >= number_of_vehicles:
                 break

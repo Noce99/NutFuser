@@ -4,6 +4,7 @@ import numpy as np
 from typing import NamedTuple, List, Tuple, Optional
 from carla_birdeye_view import lanes
 import cv2
+import math
 from carla_birdeye_view.lanes import LaneSide
 
 Mask = np.ndarray  # of shape (y, x), stores 0 and 1, dtype=np.int32
@@ -11,6 +12,7 @@ RoadSegmentWaypoints = List[carla.Waypoint]
 
 COLOR_OFF = 0
 COLOR_ON = 1
+MIN_PEDESTRIAN_EXTENT = 1
 
 
 class Coord(NamedTuple):
@@ -141,6 +143,8 @@ class MapMaskGenerator:
         min_y = self._map_boundaries.min_y
 
         # Pixel coordinates on full map
+        if abs(loc.x) == float("inf") or abs(loc.y) == float("inf") or math.isnan(loc.x) or math.isnan(loc.y):
+            return Coord(x=0, y=0)
         x = int(self.pixels_per_meter * (loc.x - min_x))
         y = int(self.pixels_per_meter * (loc.y - min_y))
 
@@ -297,12 +301,18 @@ class MapMaskGenerator:
             if not hasattr(ped, "bounding_box"):
                 continue
 
-            bb = ped.bounding_box.extent
+            position = ped.bounding_box.location
+            extents = ped.bounding_box.extent
+            if extents.x < MIN_PEDESTRIAN_EXTENT:
+                extents.x = MIN_PEDESTRIAN_EXTENT
+            if extents.y < MIN_PEDESTRIAN_EXTENT:
+                extents.y = MIN_PEDESTRIAN_EXTENT
+
             corners = [
-                carla.Location(x=-bb.x, y=-bb.y),
-                carla.Location(x=bb.x, y=-bb.y),
-                carla.Location(x=bb.x, y=bb.y),
-                carla.Location(x=-bb.x, y=bb.y),
+                carla.Location(x=position.x-extents.x, y=position.y-extents.y),
+                carla.Location(x=position.x-extents.x, y=position.y+extents.y),
+                carla.Location(x=position.x+extents.x, y=position.y+extents.y),
+                carla.Location(x=position.x+extents.x, y=position.y-extents.y),
             ]
 
             ped.get_transform().transform(corners)
@@ -340,7 +350,32 @@ class MapMaskGenerator:
 
     def crosswalks_mask(self) -> Mask:
         crosswalks_mask = self.make_empty_mask()
-        for i in range(0, len(self._map.get_crosswalks()), 5):
-            corners = [self.location_to_pixel(loc) for loc in self._map.get_crosswalks()[i:i+4]]
-            cv2.fillPoly(img=crosswalks_mask, pts=np.int32([corners]), color=COLOR_ON)
+        crosswalks_points = self._map.get_crosswalks()
+        corners = []
+        if len(crosswalks_points) > 0:
+            starting_point = crosswalks_points[0]
+            corners.append(self.location_to_pixel(crosswalks_points[0]))
+            for i in range(1, len(crosswalks_points)):
+                if len(corners) == 0:
+                    starting_point = crosswalks_points[i]
+                    corners.append(self.location_to_pixel(crosswalks_points[i]))
+                elif crosswalks_points[i].distance(starting_point) < 0.1:
+                    assert len(corners) >= 3
+                    cv2.fillPoly(img=crosswalks_mask, pts=np.int32([corners]), color=COLOR_ON)
+                    corners = []
+                else:
+                    corners.append(self.location_to_pixel(crosswalks_points[i]))
+        assert len(corners) == 0
         return crosswalks_mask
+
+    def parked_vehicle_mask(self):
+        canvas = self.make_empty_mask()
+        parked_vehicles = self._world.get_environment_objects(carla.CityObjectLabel.Car) + \
+            self._world.get_environment_objects(carla.CityObjectLabel.Motorcycle)
+        for parked_vehicle in parked_vehicles:
+            parked_vehicle_bb = parked_vehicle.bounding_box
+            vertices = parked_vehicle_bb.get_local_vertices()
+            vertices = [vertices[2], vertices[0], vertices[4], vertices[6]]
+            corners = [self.location_to_pixel(loc) for loc in vertices]
+            cv2.fillPoly(img=canvas, pts=np.int32([corners]), color=COLOR_ON)
+        return canvas

@@ -12,7 +12,6 @@ datasets/
 nut_tmp/
 train_logs/
 weights/
-nutfuser/data_creation/matteo_event_camera.py
 evaluation/
 evaluation_routes/
 # scenario_runner/
