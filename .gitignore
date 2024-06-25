@@ -18,7 +18,7 @@ evaluation_routes/
 # scenario_runner/
 evaluation/records/
 
-#FROM scenario_runner
+# FROM scenario_runner
 scenario_runner/*.pyc
 scenario_runner/srunner/autoagents/*.pyc
 scenario_runner/srunner/autoagents/__pycache__/
@@ -36,6 +36,9 @@ scenario_runner/.pydevproject
 scenario_runner/*.png
 scenario_runner/*.svg
 scenario_runner/*.dot
+
+# FROM carla_birdeye_view
+carla_birdeye_view/birdview_v3_cache/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
