@@ -8,6 +8,7 @@ import psutil
 from tqdm import tqdm
 
 from nutfuser.data_creation.generate_traffic import generate_traffic
+from nutfuser.carla_interface.manual_control import launch_manual_control
 import scenario_runner
 from nutfuser import utils
 from nutfuser import config
@@ -157,3 +158,22 @@ def launch_scenario_runner_saifly_and_wait_till_its_up(scenario_runner_pid, carl
             return True, False, launch_scenario_runner_process    # Means Scenario Runner Crashed!
         if scenario_runner_is_up.is_set():
             return True, True,  launch_scenario_runner_process    # Means everything good!
+
+
+def launch_manual_control_saifly(carla_server_pid, manual_control_pid):
+    manual_control_is_up = multiprocessing.Event()
+    manual_control_process = multiprocessing.Process(target=launch_manual_control, args=(manual_control_is_up, ))
+    manual_control_process.start()
+
+    manual_control_pid.value = manual_control_process.pid
+
+    while True:
+        if not psutil.pid_exists(carla_server_pid.value):
+            manual_control_process.kill()
+            return False, True, manual_control_is_up  # Means Carla Crashed!
+        if not manual_control_process.is_alive():
+            manual_control_process.join()
+            os.kill(carla_server_pid.value, signal.SIGKILL)
+            return True, False, manual_control_is_up  # Means Traffic Manager Crashed!
+        if manual_control_is_up.is_set():
+            return True, True, manual_control_is_up  # Means everything good!
