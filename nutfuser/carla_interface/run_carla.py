@@ -2,6 +2,7 @@ import os
 import sys
 import subprocess
 import time
+from datetime import datetime
 import multiprocessing
 import signal
 import psutil
@@ -68,12 +69,27 @@ def launch_carla_server_saifly_and_wait_till_its_up(rpc_port, carla_server_pid, 
             if return_code is not None:
                 # The Carla process died before starting up!
                 exit()
-        print(f"Seems that Carla server started, I will wait {how_many_seconds_to_wait} seconds for checking its stability!")
-        # The Carla process is up, we will wait 100 seconds just to be sure!
-        for i in tqdm(range(how_many_seconds_to_wait)):
-            # print("It's 10!")
-            time.sleep(1)
 
+        print("Waiting Carla to Start...", end="", flush=True)
+        import carla
+        start_time = datetime.now()
+        while True:
+            try:
+                client = carla.Client('localhost', rpc_port)
+                client.set_timeout(1.0)
+                _ = client.get_world()
+                break
+            except RuntimeError as e:
+                pass
+            print("*", end="", flush=True)
+            if (datetime.now() - start_time).total_seconds() > how_many_seconds_to_wait:
+                break
+        print()
+
+    # FIRST OF ALL KILL ALL CARLA SERVER RUNNING
+    for proc in psutil.process_iter():
+        if "CarlaUE4-Linux-Shipping" in proc.name():
+            os.kill(proc.pid, signal.SIGKILL)
     if not os.path.isdir(os.path.dirname(logs_path)):
         try:
             os.mkdir(os.path.dirname(logs_path))

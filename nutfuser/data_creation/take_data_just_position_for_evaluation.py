@@ -9,10 +9,9 @@ import numpy as np
 import cv2
 from tqdm import tqdm
 import xml.etree.ElementTree as ET
-
-sys.path.append(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
-import config
-import utils
+from nutfuser import config
+from nutfuser import utils
+from nutfuser.data_creation.weather import get_a_random_weather
 
 STARTING_FRAME = None
 PATHS = {}

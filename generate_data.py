@@ -7,15 +7,17 @@ import signal
 import psutil
 from ctypes import c_int
 from tabulate import tabulate
+import shutil
 
 from nutfuser.data_creation import take_data_without_records, take_data_just_position_for_evaluation
 from nutfuser import utils
 from nutfuser import config
 from datetime import datetime
-from nutfuser.carla_interface.run_carla import  check_integrity_of_carla_path, \
-                                                launch_carla_server_saifly_and_wait_till_its_up, \
-                                                set_up_world_saifly_and_wait_till_its_setted_up, \
-                                                set_up_traffic_manager_saifly_and_wait_till_its_up
+from nutfuser.carla_interface.run_carla import check_integrity_of_carla_path, \
+    launch_carla_server_saifly_and_wait_till_its_up, \
+    set_up_world_saifly_and_wait_till_its_setted_up, \
+    set_up_traffic_manager_saifly_and_wait_till_its_up
+
 
 def get_arguments():
     argparser = argparse.ArgumentParser(description=__doc__)
@@ -137,11 +139,12 @@ def get_arguments():
     args = argparser.parse_args()
     if args.town not in config.TOWN_DICT:
         error = f"Invalid Town Index! [{args.town}]\n" + \
-                 "Possible Town Index:\n"
+                "Possible Town Index:\n"
         for key in config.TOWN_DICT:
             error += f"{key} -> {config.TOWN_DICT[key]}\n"
         raise Exception(utils.color_error_string(error))
     return args
+
 
 def kill_all(carla_server_pid, traffic_manager_pid, data_creation_pid):
     try:
@@ -157,36 +160,38 @@ def kill_all(carla_server_pid, traffic_manager_pid, data_creation_pid):
     except:
         pass
 
+
 pids_to_be_killed = []
 
-def run_all(args):
+
+def run_all(args, where_to_save):
     # (1) LAUNCH CARLA SERVER
     print("Launching Carla Server...")
     os.environ["PATH"] = f"{os.environ['PATH']}:/leonardo/home/userexternal/emannocc/xdg-user-dirs-0.18/"
     carla_server_pid = multiprocessing.Value(c_int)
     carla_was_correctly_started_up = launch_carla_server_saifly_and_wait_till_its_up(
-            rpc_port=args.rpc_port,
-            carla_server_pid=carla_server_pid,
-            carlaUE4_path=carlaUE4_path,
-            logs_path=carla_log_path,
-            how_many_seconds_to_wait=args.wait_carla_for
-        )
+        rpc_port=args.rpc_port,
+        carla_server_pid=carla_server_pid,
+        carlaUE4_path=carlaUE4_path,
+        logs_path=carla_log_path,
+        how_many_seconds_to_wait=args.wait_carla_for
+    )
 
     pids_to_be_killed.append(carla_server_pid.value)
 
     if not carla_was_correctly_started_up:
         raise utils.NutException(utils.color_error_string(f"Carla crashed while starting!"))
-    
+
     print(utils.color_info_string("(1/3)\tCarla Server is UP!"))
 
     # (3) SET UP THE WORLD
     world_was_correctly_setted_up = set_up_world_saifly_and_wait_till_its_setted_up(
-            carla_ip=args.carla_ip,
-            rpc_port=args.rpc_port,
-            town_number=args.town,
-            carla_server_pid=carla_server_pid
-        )
-    
+        carla_ip=args.carla_ip,
+        rpc_port=args.rpc_port,
+        town_number=args.town,
+        carla_server_pid=carla_server_pid
+    )
+
     if not world_was_correctly_setted_up:
         raise utils.NutException(utils.color_error_string(f"Failed to set up world!"))
 
@@ -194,20 +199,20 @@ def run_all(args):
 
     # (4) SET UP TRAFFIC MANAGER
     traffic_manager_pid = multiprocessing.Value(c_int)
-    carla_is_ok,\
-    traffic_manager_is_ok,\
-    you_can_tick,\
-    traffic_manager_is_up,\
-    set_up_traffic_manager_process = set_up_traffic_manager_saifly_and_wait_till_its_up(
-            carla_ip=args.carla_ip,
-            rpc_port=args.rpc_port,
-            tm_port=args.tm_port,
-            number_of_vehicles=args.num_of_vehicle,
-            number_of_walkers=args.num_of_walkers,
-            carla_server_pid=carla_server_pid,
-            traffic_manager_pid=traffic_manager_pid,
-            logs_path=traffic_manager_log_path
-        )
+    carla_is_ok, \
+        traffic_manager_is_ok, \
+        you_can_tick, \
+        traffic_manager_is_up, \
+        set_up_traffic_manager_process = set_up_traffic_manager_saifly_and_wait_till_its_up(
+        carla_ip=args.carla_ip,
+        rpc_port=args.rpc_port,
+        tm_port=args.tm_port,
+        number_of_vehicles=args.num_of_vehicle,
+        number_of_walkers=args.num_of_walkers,
+        carla_server_pid=carla_server_pid,
+        traffic_manager_pid=traffic_manager_pid,
+        logs_path=traffic_manager_log_path
+    )
 
     pids_to_be_killed.append(traffic_manager_pid.value)
 
@@ -223,10 +228,11 @@ def run_all(args):
     ego_vehicle_found_event = multiprocessing.Event()
     finished_taking_data_event = multiprocessing.Event()
     if args.just_take_positions_for_evaluation:
-        data_creation_process = multiprocessing.Process(target=take_data_just_position_for_evaluation.take_data_just_position_for_evaluation,
-                                                        args=(egg_file_path, args.town, args.rpc_port, args.job_id,
-                                                            ego_vehicle_found_event, finished_taking_data_event,
-                                                            you_can_tick, args.num_of_frames, args.evaluation_route_path, args.show_rgb_for_evaluation))
+        data_creation_process = multiprocessing.Process(
+            target=take_data_just_position_for_evaluation.take_data_just_position_for_evaluation,
+            args=(egg_file_path, args.town, args.rpc_port, args.job_id,
+                  ego_vehicle_found_event, finished_taking_data_event,
+                  you_can_tick, args.num_of_frames, args.evaluation_route_path, args.show_rgb_for_evaluation))
         data_creation_process.start()
         data_creation_pid.value = data_creation_process.pid
         pids_to_be_killed.append(data_creation_pid.value)
@@ -235,53 +241,56 @@ def run_all(args):
         start_time = time.time()
         while True:
             if not psutil.pid_exists(carla_server_pid.value):
-                #kill_all(carla_server_pid, traffic_manager_pid, data_creation_pid)
+                # kill_all(carla_server_pid, traffic_manager_pid, data_creation_pid)
                 raise utils.NutException(utils.color_error_string(f"Carla crashed!"))
             if not set_up_traffic_manager_process.is_alive():
-                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                # kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
                 raise utils.NutException(utils.color_error_string(f"Traffic Manager crashed!"))
             if not data_creation_process.is_alive():
-                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                # kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
                 raise utils.NutException(utils.color_error_string(f"Data Creation crashed!"))
-            if not ego_vehicle_found_event.is_set() and time.time()-start_time > 10:
-                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
-                raise utils.NutException(utils.color_error_string(f"Data Creation is not able to find out the Ego Vehicle!"))
+            if not ego_vehicle_found_event.is_set() and time.time() - start_time > 10:
+                # kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                raise utils.NutException(
+                    utils.color_error_string(f"Data Creation is not able to find out the Ego Vehicle!"))
             if finished_taking_data_event.is_set():
                 break
     else:
         data_creation_process = multiprocessing.Process(target=take_data_without_records.take_data_backbone,
                                                         args=(egg_file_path, args.town, args.rpc_port, args.job_id,
-                                                            ego_vehicle_found_event, finished_taking_data_event,
-                                                            you_can_tick, args.num_of_frames, datasets_path,
-                                                            args.back_camera, args.lateral_cameras, args.original_transfuser))
+                                                              ego_vehicle_found_event, finished_taking_data_event,
+                                                              you_can_tick, args.num_of_frames, where_to_save,
+                                                              args.back_camera, args.lateral_cameras,
+                                                              args.original_transfuser))
         data_creation_process.start()
         data_creation_pid.value = data_creation_process.pid
         pids_to_be_killed.append(data_creation_pid.value)
-
 
         print(utils.get_a_title(f"STARTING TO TAKE DATA [{args.num_of_frames}]", color="green"))
         start_time = time.time()
         while True:
             if not psutil.pid_exists(carla_server_pid.value):
-                #kill_all(carla_server_pid, traffic_manager_pid, data_creation_pid)
+                # kill_all(carla_server_pid, traffic_manager_pid, data_creation_pid)
                 raise utils.NutException(utils.color_error_string(f"Carla crashed!"))
             if not set_up_traffic_manager_process.is_alive():
-                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                # kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
                 raise utils.NutException(utils.color_error_string(f"Traffic Manager crashed!"))
             if not data_creation_process.is_alive():
-                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                # kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
                 raise utils.NutException(utils.color_error_string(f"Data Creation crashed!"))
-            if not ego_vehicle_found_event.is_set() and time.time()-start_time > 10:
-                #kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
-                raise utils.NutException(utils.color_error_string(f"Data Creation is not able to find out the Ego Vehicle!"))
+            if not ego_vehicle_found_event.is_set() and time.time() - start_time > 10:
+                # kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
+                raise utils.NutException(
+                    utils.color_error_string(f"Data Creation is not able to find out the Ego Vehicle!"))
             if finished_taking_data_event.is_set():
                 break
-        
+
     print(utils.get_a_title(f"FINISHED TO TAKE DATA [{args.num_of_frames}]", color="green"))
 
     # (6) CLEANING EVERYTHING
     kill_all(carla_server_pid.value, traffic_manager_pid.value, data_creation_pid.value)
     return True
+
 
 if __name__ == "__main__":
     args = get_arguments()
@@ -311,13 +320,13 @@ if __name__ == "__main__":
         now = datetime.now()
         current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
         where_to_save = os.path.join(args.evaluation_route_path, f"{config.TOWN_DICT[args.town]}_{current_time}")
-        
+
         if not os.path.isdir(where_to_save):
             try:
                 os.mkdir(where_to_save)
             except:
                 Exception(utils.color_error_string(f"Unable to create [{where_to_save}] dir!"))
-        
+
         args.evaluation_route_path = where_to_save
     else:
 
@@ -337,19 +346,27 @@ if __name__ == "__main__":
         times_that_i_need_to_take_data = args.num_of_evaluation_routes
     else:
         times_that_i_need_to_take_data = 1
-    
+
     for k in range(times_that_i_need_to_take_data):
         if times_that_i_need_to_take_data > 1:
-            to_print = f"# Taking Data Loop number {k+1}/{times_that_i_need_to_take_data} #"
-            print(utils.color_info_string("#"*len(to_print)))
+            to_print = f"# Taking Data Loop number {k + 1}/{times_that_i_need_to_take_data} #"
+            print(utils.color_info_string("#" * len(to_print)))
             print(utils.color_info_string(to_print))
-            print(utils.color_info_string("#"*len(to_print)))
+            print(utils.color_info_string("#" * len(to_print)))
             args.job_id = k
         # LET'S RUN ALL
+        where_to_save = None
         for i in range(config.MAX_NUM_OF_ATTEMPS):
+            if i > 0:
+                # It's not the first attempt to we need to remove the previous failed data
+                shutil.rmtree(where_to_save, ignore_errors=False, onerror=None)
+            now = datetime.now()
+            current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
+            where_to_save = os.path.join(datasets_path, f"{args.job_id}_{current_time}_{config.TOWN_DICT[args.town]}")
+            os.mkdir(where_to_save)
             try:
-                print(utils.get_a_title(f"ATTEMPT [{i+1}/{config.MAX_NUM_OF_ATTEMPS}]", "blue"))
-                if run_all(args):
+                print(utils.get_a_title(f"ATTEMPT [{i + 1}/{config.MAX_NUM_OF_ATTEMPS}]", "blue"))
+                if run_all(args, where_to_save):
                     break
             except utils.NutException as e:
                 print(e.message)
@@ -367,8 +384,6 @@ if __name__ == "__main__":
                     except:
                         pass
                 exit()
-    
+
     if args.just_take_positions_for_evaluation:
         utils.unify_routes_xml(args.evaluation_route_path)
-
-    

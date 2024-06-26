@@ -77,6 +77,21 @@ RGB_BY_MASK = {
     BirdViewMasks.ROAD:             RGB.DIM_GRAY,
 }
 
+INDEX_BY_MASK = {
+    BirdViewMasks.PEDESTRIANS:      1,
+    BirdViewMasks.RED_LIGHTS:       2,
+    BirdViewMasks.YELLOW_LIGHTS:    3,
+    BirdViewMasks.GREEN_LIGHTS:     4,
+    BirdViewMasks.AGENT:            5,
+    BirdViewMasks.VEHICLES:         6,
+    BirdViewMasks.CENTERLINES:      7,
+    BirdViewMasks.PASSABLE_LANES:   8,
+    BirdViewMasks.UNPASSABLE_LANES: 9,
+    BirdViewMasks.CROSSWALKS:       10,
+    BirdViewMasks.ROAD:             11,
+}
+
+inv_INDEX_BY_MASK = {v: k for k, v in INDEX_BY_MASK.items()}
 
 def rotate(image, angle, center=None, scale=1.0):
     assert image.dtype == np.uint8
@@ -286,6 +301,20 @@ class BirdViewProducer:
             # If mask above contains 0, don't overwrite content of canvas (0 indicates transparency)
             rgb_canvas[nonzero_indices(mask)] = rgb_color
         return rgb_canvas
+
+    @staticmethod
+    def as_carla_semantic(birdview: BirdView) -> RgbCanvas:
+        h, w, d = birdview.shape
+        assert d == len(BirdViewMasks)
+        bw_canvas = np.zeros(shape=(h, w, 1), dtype=np.uint8)
+        nonzero_indices = lambda arr: arr == COLOR_ON
+
+        for mask_type in BirdViewMasks.bottom_to_top():
+            index_color = INDEX_BY_MASK[mask_type]
+            mask = birdview[:, :, mask_type]
+            # If mask above contains 0, don't overwrite content of canvas (0 indicates transparency)
+            bw_canvas[nonzero_indices(mask)] = index_color
+        return bw_canvas
 
     def _render_actors_masks(
         self,
