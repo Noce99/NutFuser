@@ -94,7 +94,7 @@ if __name__ == "__main__":
     done = False
     while not done:
         try:
-            account_name = int(input("What is you slurm account name? [string] : "))
+            account_name = str(input("What is you slurm account name? [string] : "))
             done = True
         except KeyboardInterrupt:
             print(utils.color_info_string("Bye!"))
