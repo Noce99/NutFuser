@@ -90,6 +90,18 @@ if __name__ == "__main__":
         except:
             done = False
 
+    # ASK SLURM ACCOUNT
+    done = False
+    while not done:
+        try:
+            account_name = int(input("What is you slurm account name? [string] : "))
+            done = True
+        except KeyboardInterrupt:
+            print(utils.color_info_string("Bye!"))
+            exit()
+        except:
+            done = False
+
     # GET NUTFUSER FOLDER
     NUTFUSER = os.path.dirname(os.path.realpath(__file__))
     where_to_save_data = os.path.join(NUTFUSER, "datasets")
@@ -120,6 +132,7 @@ f"""#!/bin/sh
 #SBATCH --ntasks=1
 #SBATCH --time=24:00:00
 #SBATCH --gres=gpu:1
+#SBATCH --account={account_name}
 
 # print info about current job
 
