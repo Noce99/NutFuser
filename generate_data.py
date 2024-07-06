@@ -370,7 +370,7 @@ if __name__ == "__main__":
             args.job_id = k
         # LET'S RUN ALL
         where_to_save = None
-        for i in range(config.MAX_NUM_OF_ATTEMPS):
+        for i in range(config.MAX_NUM_OF_ATTEMPTS):
             if i > 0:
                 # It's not the first attempt to we need to remove the previous failed data
                 shutil.rmtree(where_to_save, ignore_errors=False, onerror=None)
@@ -379,7 +379,7 @@ if __name__ == "__main__":
             where_to_save = os.path.join(datasets_path, f"{args.job_id}_{current_time}_{config.TOWN_DICT[args.town]}")
             os.mkdir(where_to_save)
             try:
-                print(utils.get_a_title(f"ATTEMPT [{i + 1}/{config.MAX_NUM_OF_ATTEMPS}]", "blue"))
+                print(utils.get_a_title(f"ATTEMPT [{i + 1}/{config.MAX_NUM_OF_ATTEMPTS}]", "blue"))
                 if run_all(args, where_to_save):
                     break
             except utils.NutException as e:

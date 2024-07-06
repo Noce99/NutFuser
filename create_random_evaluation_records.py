@@ -245,9 +245,9 @@ if __name__ == "__main__":
     print(tabulate(a_table, headers=a_table_head, tablefmt="grid"))
 
     # LET'S RUN ALL
-    for i in range(config.MAX_NUM_OF_ATTEMPS):
+    for i in range(config.MAX_NUM_OF_ATTEMPTS):
         try:
-            print(utils.get_a_title(f"ATTEMPT [{i+1}/{config.MAX_NUM_OF_ATTEMPS}]", "blue"))
+            print(utils.get_a_title(f"ATTEMPT [{i+1}/{config.MAX_NUM_OF_ATTEMPTS}]", "blue"))
             if run_all(args):
                 break
         except utils.NutException as e:
