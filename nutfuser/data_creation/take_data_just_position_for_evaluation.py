@@ -76,13 +76,13 @@ def take_data_just_position_for_evaluation(carla_egg_path, town_id, rpc_port, jo
     def gps_callback(data):
         if not DISABLE_ALL_SENSORS or KEEP_GPS:
             ALL_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
-        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             FRAME_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
             ALREADY_OBTAINED_DATA_FROM_SENSOR_B["frame_gps_position"] = True
 
     # IMU callback
     def imu_callback(data):
-        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+        if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             FRAME_COMPASS.append(data.compass)
             ALREADY_OBTAINED_DATA_FROM_SENSOR_B["compass"] = True
 
@@ -150,9 +150,9 @@ def take_data_just_position_for_evaluation(carla_egg_path, town_id, rpc_port, jo
     DISABLE_ALL_SENSORS = False
 
     you_can_tick_event.set()
-    for _ in tqdm(range(how_many_frames*config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE), desc=utils.color_info_string("Taking data...")):
+    for _ in tqdm(range(how_many_frames*config.AMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE), desc=utils.color_info_string("Taking data...")):
         world_snapshot = world.wait_for_tick()
-        if (world_snapshot.frame - STARTING_FRAME) % config.AMMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
+        if (world_snapshot.frame - STARTING_FRAME) % config.AMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             while True:
                 if sum(ALREADY_OBTAINED_DATA_FROM_SENSOR_B.values()) == len(ALREADY_OBTAINED_DATA_FROM_SENSOR_B):
                     break

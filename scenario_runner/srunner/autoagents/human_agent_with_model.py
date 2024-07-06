@@ -313,9 +313,9 @@ class HumanAgentWithModel(AutonomousAgent):
         the_model_want_to_brake = pred_target_speed[0][0] > 0.1
         if the_model_want_to_brake and \
             (
-                (ammount_of_obtacles_in_front > config.MINIMUM_AMMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_MOVING and speed[0] >= 10) 
+                (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_MOVING and speed[0] >= 10) 
                 or 
-                (ammount_of_obtacles_in_front > config.MINIMUM_AMMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_STOP and speed[0] < 10)
+                (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_STOP and speed[0] < 10)
             ): # we will stop the car
             steer =     float(0)
             throttle =  float(0)
