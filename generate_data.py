@@ -336,6 +336,20 @@ if __name__ == "__main__":
             except:
                 Exception(utils.color_error_string(f"Unable to create [{datasets_path}] dir!"))
 
+    # Let's Create the Maps Cache Folder
+    carla_birdeye_view_path = os.path.join(pathlib.Path(__file__).parent.resolve(), "carla_birdeye_view")
+    if not os.path.isdir(str(carla_birdeye_view_path)):
+        raise Exception(utils.color_error_string(f"Unable to find [{carla_birdeye_view_path}] dir!"))
+    birdview_v3_cache_path = os.path.join(str(carla_birdeye_view_path), "birdview_v3_cache")
+    if not os.path.isdir(birdview_v3_cache_path):
+        os.mkdir(birdview_v3_cache_path)
+    birdview_v3_cache_path_Carla = os.path.join(str(birdview_v3_cache_path), "Carla")
+    if not os.path.isdir(birdview_v3_cache_path_Carla):
+        os.mkdir(birdview_v3_cache_path_Carla)
+    birdview_v3_cache_path_Carla_Maps = os.path.join(str(birdview_v3_cache_path_Carla), "Maps")
+    if not os.path.isdir(birdview_v3_cache_path_Carla_Maps):
+        os.mkdir(birdview_v3_cache_path_Carla_Maps)
+
     a_table_head = ["Argument", "Value"]
     a_table = []
     for arg in vars(args):

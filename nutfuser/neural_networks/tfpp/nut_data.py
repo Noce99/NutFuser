@@ -17,10 +17,16 @@ import torch
 
 DataFolder = collections.namedtuple('DataFolder', ['path', 'elements'])
 
+
 class backbone_dataset(Dataset):
-    def __init__(self, rank, dataset_path):
+    def __init__(self, rank, dataset_path, tfpp_config=None):
         self.rank = rank
         self.dataset_path = dataset_path
+        self.tfpp_config = tfpp_config
+        if self.tfpp_config is not None:
+            self.use_abstract_bev_sematic = self.tfpp_config.use_abstract_bev_sematic
+        else:
+            self.use_abstract_bev_sematic = False
 
         self.cache = None
         self.data_folders = []
@@ -49,7 +55,7 @@ class backbone_dataset(Dataset):
         # Let's check if the dataset folder really exist
         if not os.path.isdir(self.dataset_path):
             raise Exception(utils.color_error_string(f"No Dataset folder found in '{self.dataset_path}'!"))
-        
+
         # I get the first folder I found (random_data_folder). I expect this to be a Data Folder.
         random_data_folder = None
         for el in os.listdir(self.dataset_path):
@@ -76,7 +82,10 @@ class backbone_dataset(Dataset):
             self.folders_that_should_be_there += [("rgb_tfpp", ".jpg")]
         if "lidar_tfpp" in subfolders:
             self.folders_that_should_be_there += [("lidar_tfpp", ".png")]
-        
+        if self.use_abstract_bev_sematic:
+            self.folders_that_should_be_there.remove(("bev_semantic", ".png"))
+            self.folders_that_should_be_there += [("bev_semantic_2", ".png")]
+
         def check_that_all_sensors_have_the_same_ammount_of_frame(data_folder_path):
             """
             This function check for each subfolder of the given Data Folder Path if
@@ -142,7 +151,8 @@ class backbone_dataset(Dataset):
             ["Number of Data Folders", len(self.data_folders)],
             ["Number of Frames per Folder in average", f"{self.total_number_of_frames/len(self.data_folders):.2f}"],
             ["Memory Size per Frame", f"{self.bytes_per_frame/1e6:.2f} MB"],
-            ["Approximally Size of Dataset", f"{self.bytes_per_frame*self.total_number_of_frames/1e9:.2f} GB"]
+            ["Approximally Size of Dataset", f"{self.bytes_per_frame*self.total_number_of_frames/1e9:.2f} GB"],
+            ["Use Abstract Bev Semantic", f"{self.use_abstract_bev_sematic}"]
         ]
         print(tabulate(a_table, headers=a_table_head, tablefmt="grid"))
 
@@ -160,7 +170,7 @@ class backbone_dataset(Dataset):
                 self.data_path[index] = data_folder.path
                 self.data_id[index] = ii
                 index += 1
-        
+
         # Let's read:
         # - input speed (input of the model)
         # - target point (input of the model)
@@ -199,6 +209,8 @@ class backbone_dataset(Dataset):
             if "optical_flow" in data_name:
                 data[data_name] = cv2.imread(os.path.join(path, data_name, f"{id}{data_extension}"), cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
                 data[data_name] = data[data_name].astype(np.float32)
+            elif "bev_semantic_2" in data_name:
+                data["bev_semantic"] = cv2.imread(os.path.join(path, data_name, f"{id}{data_extension}"))
             else:
                 data[data_name] = cv2.imread(os.path.join(path, data_name, f"{id}{data_extension}"))
         data["input_speed"] = self.previous_speeds[self.data_path[idx]][id]

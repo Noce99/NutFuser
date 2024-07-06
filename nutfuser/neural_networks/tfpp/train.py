@@ -1,10 +1,10 @@
-'''
+"""
 Training script for training transFuser and related models.
 Usage:
 CUDA_VISIBLE_DEVICES=0,1 OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=1
 torchrun --nnodes=1 --nproc_per_node=2 --max_restarts=0 --rdzv_id=1234576890 --rdzv_backend=c10d
 train.py --logdir /path/to/logdir --root_dir /path/to/dataset_root/ --id exp_000 --cpu_cores 8
-'''
+"""
 
 import argparse
 import json
@@ -341,6 +341,10 @@ def main():
                         type=int,
                         default=int(config.use_flow),
                         help='Predict Otpical Flow')
+    parser.add_argument('--use_abstract_bev_sematic',
+                        type=int,
+                        default=int(config.use_abstract_bev_sematic),
+                        help='Use Abstract Bev Semantic')
     args = parser.parse_args()
     args.logdir = os.path.join(args.logdir, args.id)
 
@@ -387,6 +391,10 @@ def main():
 
     # Configure config. Converts all arguments into config attributes
     config.initialize(**vars(args))
+
+    if args.use_abstract_bev_sematic:
+        config.num_bev_semantic_classes = 12
+        config.bev_semantic_weights = [1 for _ in range(config.num_bev_semantic_classes)]
 
     config.debug = int(os.environ.get('DEBUG_CHALLENGE', 0))
     # Before normalizing we need to set the losses we don't use to 0
@@ -466,9 +474,9 @@ def main():
 
     # Data, configures config. Create before the model
 
-    train_set = backbone_dataset(rank=rank, dataset_path=args.root_dir)
+    train_set = backbone_dataset(rank=rank, dataset_path=args.root_dir, tfpp_config=config)
 
-    val_set = backbone_dataset(rank=rank, dataset_path=args.val_dir)
+    val_set = backbone_dataset(rank=rank, dataset_path=args.val_dir, tfpp_config=config)
 
     if rank == 0:
         print('Target speed weights: ', config.target_speed_weights, flush=True)
@@ -748,7 +756,7 @@ class Engine(object):
             rgb = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
 
         semantic_label = F.one_hot(data["semantic_0"][:, :, :, 0].type(torch.LongTensor), 8).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
-        bev_semantic_label = F.one_hot(torch.rot90(data["bev_semantic"], 3, [1, 2])[:, :, :, 0].type(torch.LongTensor), 6).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+        bev_semantic_label = F.one_hot(torch.rot90(data["bev_semantic"], 3, [1, 2])[:, :, :, 0].type(torch.LongTensor), self.config.num_bev_semantic_classes).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
         depth_label = (data["depth_0"][:, :, :, 0]/255).contiguous().to(self.device, dtype=torch.float32)
         lidar = data["bev_lidar"][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
         flow_label = (data["optical_flow_0"][:, :, :, :2] / 2**15 - 1).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)

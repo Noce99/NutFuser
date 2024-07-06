@@ -245,7 +245,7 @@ class GlobalConfig:
         self.learn_multi_task_weights = False  # Whether to learn the multi-task weights
         self.use_bev_semantic = True  # Whether to use bev semantic segmentation as auxiliary loss for training.
         self.use_depth = True  # Whether to use depth prediction as auxiliary loss for training.
-        self.use_flow = True # Whether to use optical flow prediction as auxiliary loss for training.
+        self.use_flow = True  # Whether to use optical flow prediction as auxiliary loss for training.
         self.num_repetitions = 3  # How many repetitions of the dataset we train with.
         self.continue_epoch = True  # Whether to continue the training from the loaded epoch or from 0.
 
@@ -534,6 +534,8 @@ class GlobalConfig:
         self.plant_multitask = False
         self.plant_max_speed_pred = 60.0  # Maximum speed we classify when forcasting cars.
         self.forcast_time = 0.5  # Number of seconds we forcast into the future
+
+        self.use_abstract_bev_sematic = False
 
     def initialize(self, root_dir='', setting='all', **kwargs):
         for k, v in kwargs.items():

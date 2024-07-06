@@ -13,6 +13,7 @@ import torch
 
 from nutfuser import utils
 
+
 def get_arguments():
     argparser = argparse.ArgumentParser(description=__doc__)
     argparser.add_argument(
@@ -60,6 +61,11 @@ def get_arguments():
         default=0,
         type=int
     )
+    argparser.add_argument(
+        '--use_abstract_bev_sematic',
+        help='If we want to use the abstract version of the bev semantic! (default: False)',
+        action='store_true'
+    )
     args = argparser.parse_args()
     # THERE I CHECK THE ARGUMENTS
     if args.dataset_validation is None:
@@ -67,30 +73,30 @@ def get_arguments():
     if args.dataset_train == args.dataset_validation:
         print(utils.color_info_string(
             "WARNING:"
-        )+
-        utils.color_error_string(
-            "The training and validation set are the same!"
-        ))
+        ) +
+              utils.color_error_string(
+                  "The training and validation set are the same!"
+              ))
     if args.just_backbone is False and args.weights_path is None:
-        raise  utils.NutException(utils.color_error_string(
-            "You cannot train on the all network (not just the backbone) without giving some weights.\n"+
-            "The whole trainign process is composed firstly by a backbone training of 30 epochs and secondly"+
+        raise utils.NutException(utils.color_error_string(
+            "You cannot train on the all network (not just the backbone) without giving some weights.\n" +
+            "The whole trainign process is composed firstly by a backbone training of 30 epochs and secondly" +
             " by a full network training with the previusly computed weights!"))
     if not os.path.isdir(args.dataset_train):
-        raise  utils.NutException(utils.color_error_string(
+        raise utils.NutException(utils.color_error_string(
             f"The folder '{args.dataset_train}' does not exist!"))
     if not os.path.isdir(args.dataset_validation):
-        raise  utils.NutException(utils.color_error_string(
+        raise utils.NutException(utils.color_error_string(
             f"The folder '{args.dataset_validation}' does not exist!"))
     if args.weights_path is not None and not os.path.isfile(args.weights_path):
-        raise  utils.NutException(utils.color_error_string(
+        raise utils.NutException(utils.color_error_string(
             f"The file '{args.weights_path}' does not exist!"))
     # THERE I PROPERLY CHECK THAT THE DATASETFOLDERS ARE WELL BUILTED
     for folder in tqdm(os.listdir(args.dataset_train)):
         folder_path = os.path.join(args.dataset_train, folder)
         if os.path.isdir(folder_path):
             utils.check_dataset_folder(folder_path)
-    
+
     if args.dataset_validation != args.dataset_train:
         for folder in tqdm(os.listdir(args.dataset_validation)):
             folder_path = os.path.join(args.dataset_validation, folder)
@@ -102,7 +108,8 @@ def get_arguments():
         args.train_flow = 0
     return args
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     args = get_arguments()
 
     a_table_head = ["Argument", "Value"]
@@ -125,7 +132,7 @@ if __name__=="__main__":
     if not os.path.isdir(os.path.join(train_logs_folder, "nvidia_log")):
         os.mkdir(os.path.join(train_logs_folder, "nvidia_log"))
     nvidia_log = os.path.join(train_logs_folder, "nvidia_log", f"{current_time}")
-    
+
     my_nvidia_demon = multiprocessing.Process(target=utils.print_nvidia_gpu_status_on_log_file, args=(nvidia_log, 20))
     my_nvidia_demon.start()
 
@@ -141,25 +148,31 @@ if __name__=="__main__":
     else:
         train_control_network = 1
 
+    if args.use_abstract_bev_sematic:
+        use_abstract_bev_sematic = 1
+    else:
+        use_abstract_bev_sematic = 0
+
     with open(output_log, 'w') as logs_file:
         train_process = subprocess.Popen(
-                    [   shell_train_path,
-                        f"{venv_to_source_path}",
-                        f"{train_script_path}",
-                        f"{args.dataset_train}",
-                        f"{args.dataset_validation}",
-                        f"{train_logs_folder}",
-                        f"{args.batch_size}",
-                        f"{args.train_flow}",
-                        f"{num_of_gpu}",
-                        f"{args.weights_path}",
-                        f"{args.epoch}",
-                        f"{train_control_network}"],
-                    universal_newlines=True,
-                    stdout=logs_file,
-                    stderr=logs_file,
-                )
-    
+            [shell_train_path,
+             f"{venv_to_source_path}",
+             f"{train_script_path}",
+             f"{args.dataset_train}",
+             f"{args.dataset_validation}",
+             f"{train_logs_folder}",
+             f"{args.batch_size}",
+             f"{args.train_flow}",
+             f"{num_of_gpu}",
+             f"{args.weights_path}",
+             f"{args.epoch}",
+             f"{train_control_network}",
+             f"{use_abstract_bev_sematic}"],
+            universal_newlines=True,
+            stdout=logs_file,
+            stderr=logs_file,
+        )
+
     train_pid = train_process.pid
     nvidia_pid = my_nvidia_demon.pid
 
@@ -199,14 +212,14 @@ if __name__=="__main__":
     try:
         os.kill(torch_run_pid, signal.SIGKILL)
     except ProcessLookupError:
-            pass
+        pass
     try:
         os.kill(train_pid, signal.SIGKILL)
     except ProcessLookupError:
-            pass
+        pass
     try:
         os.kill(nvidia_pid, signal.SIGKILL)
     except ProcessLookupError:
-            pass
+        pass
     print()
     print("Killed Everything!")
