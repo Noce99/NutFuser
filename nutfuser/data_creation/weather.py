@@ -34,7 +34,23 @@ def get_a_random_weather():
                                                 # Dependent on light wavelength, resulting in a blue sky in the day or
                                                 # red sky in the evening (default: 0.0331)
     )
-    return a_weather
+    weather_dict = {
+        "cloudiness": cloudiness,
+        "precipitation": precipitation,
+        "precipitation_deposits": precipitation,
+        "wind_intensity": wind_intensity,
+        "sun_azimuth_angle": 0.0,
+        "sun_altitude_angle": sun_altitude_angle,
+        "fog_density": fog_density,
+        "fog_distance": 15.0,
+        "wetness": 0.0,
+        "fog_falloff": 0.0,
+        "scattering_intensity": 0.0,
+        "mie_scattering_scale": 0.0,
+        "rayleigh_scattering_scale": 0.0331,
+    }
+
+    return a_weather, weather_dict
 
 
 def put_elements_in_bins(elements, num_of_bin, min_value, max_value):

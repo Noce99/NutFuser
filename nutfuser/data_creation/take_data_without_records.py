@@ -8,6 +8,8 @@ import time
 import numpy as np
 import cv2
 from tqdm import tqdm
+import json
+
 from nutfuser import config
 from nutfuser import utils
 from nutfuser.data_creation.weather import get_a_random_weather
@@ -23,6 +25,7 @@ STARTING_FRAME = None
 PATHS = {}
 ALREADY_OBTAINED_DATA_FROM_SENSOR_A = []
 ALREADY_OBTAINED_DATA_FROM_SENSOR_B = []
+ALREADY_OBTAINED_ALL_GPS = False
 FRAME_GPS_POSITIONS = []
 ALL_GPS_POSITIONS = []
 FRAME_COMPASS = []
@@ -65,6 +68,9 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         ALREADY_OBTAINED_DATA_FROM_SENSOR_B["rgb_tfpp"] = False
         ALREADY_OBTAINED_DATA_FROM_SENSOR_B["lidar_tfpp"] = False
 
+    global ALREADY_OBTAINED_ALL_GPS
+    ALREADY_OBTAINED_ALL_GPS = True
+
     # Connect the client and set up bp library
     client = carla.Client('localhost', rpc_port)
     client.set_timeout(60.0)
@@ -106,7 +112,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     )
 
     # I will set a random weather
-    a_random_weather = get_a_random_weather()
+    a_random_weather, weather_dict = get_a_random_weather()
     world.set_weather(a_random_weather)
 
     # LIDAR callback
@@ -203,8 +209,10 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     # GPS callback
     def gps_callback(data):
+        global ALREADY_OBTAINED_ALL_GPS
         if not DISABLE_ALL_SENSORS or KEEP_GPS:
             ALL_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
+            ALREADY_OBTAINED_ALL_GPS = True
         if not DISABLE_ALL_SENSORS and (data.frame - STARTING_FRAME) % config.AMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
             FRAME_GPS_POSITIONS.append((data.latitude, data.longitude, data.altitude))
             ALREADY_OBTAINED_DATA_FROM_SENSOR_B["frame_gps_position"] = True
@@ -395,7 +403,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     def merge_semantics(bev_semantic, bottom_bev_semantic):
         """
         We keep:
-        0 -> uknown
+        0 -> unknown
         1 -> road
         2 -> terrain where the car should not go
         3 -> line_on_asphalt + written staff on the ground
@@ -436,7 +444,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     def unify_semantic_tags(semantic):
         """
         We keep:
-        0 -> uknown
+        0 -> unknown
         1 -> road
         2 -> terrain where the car should not go
         3 -> line_on_asphalt + written staff on the ground
@@ -473,7 +481,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
 
     signal.signal(signal.SIGINT, cntrl_c)
 
-    # Let's Run Some Carla's Step to let everithing to be setted up
+    # Let's Run Some Carla's Step to let everything be set up
     global DISABLE_ALL_SENSORS
     global KEEP_GPS
     global STARTING_FRAME
@@ -510,13 +518,31 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
             ALREADY_OBTAINED_DATA_FROM_SENSOR_B[key] = False
     DISABLE_ALL_SENSORS = True
     KEEP_GPS = True
-    for _ in tqdm(range(config.FRAME_TO_KEEP_GOING_AFTER_THE_END),
-                  desc=utils.color_info_string("I get the last gps data...")):
-        world_snapshot = world.wait_for_tick()
-        time.sleep(0.1)
+    last_real_coordinate = []
+    cumulative_distance = 0
+    distance_we_need = config.DISTANCE_BETWEEN_TARGETPOINTS + 0.3 * config.DISTANCE_BETWEEN_TARGETPOINTS
+    distance_bar = tqdm(total=distance_we_need,
+                        desc=utils.color_info_string("I get the last gps data..."),
+                        bar_format="{l_bar}{bar}| {n:.3f}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]")
+    while True:
+        world.wait_for_tick()
+        while True:
+            if ALREADY_OBTAINED_ALL_GPS:
+                break
+        last_real_coordinate.append(utils.convert_gps_to_carla(np.array([ALL_GPS_POSITIONS[-1]]))[0])
+        if len(last_real_coordinate) > 1:
+            a_distance = math.sqrt((last_real_coordinate[-2][0] - last_real_coordinate[-1][0]) ** 2 +
+                                   (last_real_coordinate[-2][1] - last_real_coordinate[-1][1]) ** 2)
+            cumulative_distance += a_distance
+            if cumulative_distance >= distance_we_need:
+                break
+            distance_bar.update(a_distance)
         you_can_tick_event.set()
-    world.wait_for_tick()
-    time.sleep(0.5)
+        ALREADY_OBTAINED_ALL_GPS = False
+    distance_bar.close()
+    del last_real_coordinate
+    del cumulative_distance
+    del distance_bar
     # BEV SEMANTIC
     for i in tqdm(range(0, how_many_frames), desc=utils.color_info_string("Unifing Top and Bottom BEV...")):
         top_bev_semantic = cv2.imread(os.path.join(PATHS["bev_semantic"], f"top_{i}.png"))[:, :, 0]
@@ -531,12 +557,12 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     frame_gps_positions_array = np.array(FRAME_GPS_POSITIONS)
     all_carla_positions_array = utils.convert_gps_to_carla(all_gps_positions_array)
     frame_carla_positions_array = utils.convert_gps_to_carla(frame_gps_positions_array)
-    np.save(os.path.join(os.path.join(where_to_save), "all_gps_positions.npy"), all_gps_positions_array)
-    np.save(os.path.join(os.path.join(where_to_save), "frame_gps_positions.npy"), frame_gps_positions_array)
+    np.save(os.path.join(str(os.path.join(where_to_save)), "all_gps_positions.npy"), all_gps_positions_array)
+    np.save(os.path.join(str(os.path.join(where_to_save)), "frame_gps_positions.npy"), frame_gps_positions_array)
     # COMPASS
     print(utils.color_info_string("Saving Compass data!"))
     frame_compass_array = np.array(FRAME_COMPASS)
-    np.save(os.path.join(os.path.join(where_to_save), "frame_compass.npy"), frame_compass_array)
+    np.save(os.path.join(str(os.path.join(where_to_save)), "frame_compass.npy"), frame_compass_array)
     # NEXT 10 WAYPOINTS of 1 M distance
     frame_waypoints = np.zeros((len(frame_carla_positions_array), config.NUM_OF_WAYPOINTS, 3))
     frame_waypoints_not_rotated = np.zeros((len(frame_carla_positions_array), config.NUM_OF_WAYPOINTS, 3))
@@ -544,7 +570,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         all_id = frame_id * config.AMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
         # print(f"{frame_carla_positions_array[frame_id]} =? {all_carla_positions_array[all_id]}")
         distance = 0
-        old_distance = 0
+
         for i in range(1, config.NUM_OF_WAYPOINTS + 1):
             while True:
                 all_id += 1
@@ -582,7 +608,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
                     frame_waypoints[frame_id, i - 1] = vehicle_waypoint
                     frame_waypoints_not_rotated[frame_id, i - 1] = vehicle_origin_carla_coordinate_waypoint
                     break
-    np.save(os.path.join(os.path.join(where_to_save), "frame_waypoints.npy"), frame_waypoints)
+    np.save(os.path.join(str(os.path.join(where_to_save)), "frame_waypoints.npy"), frame_waypoints)
     # NEXT TARGETPOINT of 30/50 m distance
     frame_targetpoints = np.zeros((len(frame_carla_positions_array), 3))
 
@@ -712,7 +738,29 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     next_speeds_array = np.array(next_speeds)
     acceleration_array = np.array(accelerations)
     # we save the speed data
-    np.save(os.path.join(os.path.join(where_to_save), "previous_speeds.npy"), previous_speeds_array)
-    np.save(os.path.join(os.path.join(where_to_save), "next_speeds.npy"), next_speeds_array)
-    np.save(os.path.join(os.path.join(where_to_save), "accelerations.npy"), acceleration_array)  # TO BE TESTED
+    np.save(os.path.join(str(os.path.join(where_to_save)), "previous_speeds.npy"), previous_speeds_array)
+    np.save(os.path.join(str(os.path.join(where_to_save)), "next_speeds.npy"), next_speeds_array)
+    np.save(os.path.join(str(os.path.join(where_to_save)), "accelerations.npy"), acceleration_array)
+
+    # LET'S PRINT A INFO JSON FILE
+    run_info = {
+        "carla_egg_path": carla_egg_path,
+        "town_id": town_id,
+        "rpc_port": rpc_port,
+        "job_id": job_id,
+        "how_many_frames": how_many_frames,
+        "where_to_save": where_to_save,
+        "back_camera": back_camera,
+        "lateral_cameras": lateral_cameras,
+        "tfpp_inputs": tfpp_inputs
+    }
+    data_info_json = {
+        "weather": weather_dict,
+        "config": utils.get_configs_as_dict(),
+        "run_info": run_info,
+    }
+    data_info_file_name = "data_info.json"
+    with open(os.path.join(where_to_save, data_info_file_name), "w") as out_file:
+        json.dump(data_info_json, out_file, indent=4, sort_keys=True)
+
     finished_taking_data_event.set()

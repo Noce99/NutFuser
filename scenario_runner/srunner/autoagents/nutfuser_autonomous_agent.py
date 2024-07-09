@@ -230,9 +230,9 @@ class NutfuserAutonomousAgent(AutonomousAgent):
             lidar_bev_image[:, :, 2] = numpy_lidar_bev/255
 
         """
-        rectangle_top_left =        (   int(lidar_bev.shape[0]/2 - config.LIDAR_RECATNGLE_WIDTH/2),
+        rectangle_top_left =        (   int(lidar_bev.shape[0]/2 - config.LIDAR_RECTANGLE_WIDTH/2),
                                         int(lidar_bev.shape[1]/2 - config.LIDAR_RECTANGLE_HEIGHT))
-        rectangle_bottom_right =    (   int(lidar_bev.shape[0]/2 + config.LIDAR_RECATNGLE_WIDTH/2),
+        rectangle_bottom_right =    (   int(lidar_bev.shape[0]/2 + config.LIDAR_RECTANGLE_WIDTH/2),
                                         int(lidar_bev.shape[1]/2))
 
         rectangle = lidar_bev[rectangle_top_left[1]:rectangle_bottom_right[1],

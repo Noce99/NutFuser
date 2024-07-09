@@ -9,6 +9,8 @@ import xml.etree.ElementTree as ET
 from tqdm import tqdm
 from datetime import datetime
 from pynvml import *
+from types import ModuleType
+
 from nutfuser.raft_flow_colormap import flow_to_image
 import nutfuser.config as config
 from nutfuser.neural_networks.tfpp_config import GlobalConfig
@@ -644,3 +646,11 @@ def unify_routes_xml(xmls_folder_path):
     tree.write(os.path.join(xmls_folder_path, f"evaluation.xml"))
 
 
+def get_configs_as_dict():
+    vars_name = {item: getattr(config, item) for item in dir(config) if not item.startswith("__")
+                 and not isinstance(getattr(config, item), ModuleType)}
+    return vars_name
+
+
+if __name__ == "__main__":
+    pass
