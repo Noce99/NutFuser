@@ -62,8 +62,23 @@ def get_arguments():
         type=int
     )
     argparser.add_argument(
-        '--use_abstract_bev_sematic',
+        '--use_abstract_bev_semantic',
         help='If we want to use the abstract version of the bev semantic! (default: False)',
+        action='store_true'
+    )
+    argparser.add_argument(
+        '--use_semantic',
+        help='If we want to use the semantic! (default: False)',
+        action='store_true'
+    )
+    argparser.add_argument(
+        '--use_depth',
+        help='If we want to use the depth! (default: False)',
+        action='store_true'
+    )
+    argparser.add_argument(
+        '--use_bev_semantic',
+        help='If we want to use the bev semantic! (default: False)',
         action='store_true'
     )
     args = argparser.parse_args()
@@ -148,10 +163,25 @@ if __name__ == "__main__":
     else:
         train_control_network = 1
 
-    if args.use_abstract_bev_sematic:
-        use_abstract_bev_sematic = 1
+    if args.use_abstract_bev_semantic:
+        use_abstract_bev_semantic = 1
     else:
-        use_abstract_bev_sematic = 0
+        use_abstract_bev_semantic = 0
+
+    if args.use_semantic:
+        use_semantic = 1
+    else:
+        use_semantic = 0
+
+    if args.use_depth:
+        use_depth = 1
+    else:
+        use_depth = 0
+
+    if args.use_bev_semantic:
+        use_bev_semantic = 1
+    else:
+        use_bev_semantic = 0
 
     with open(output_log, 'w') as logs_file:
         train_process = subprocess.Popen(
@@ -167,7 +197,10 @@ if __name__ == "__main__":
              f"{args.weights_path}",
              f"{args.epoch}",
              f"{train_control_network}",
-             f"{use_abstract_bev_sematic}"],
+             f"{use_abstract_bev_semantic}",
+             f"{use_semantic}",
+             f"{use_depth}",
+             f"{use_bev_semantic}"],
             universal_newlines=True,
             stdout=logs_file,
             stderr=logs_file,
