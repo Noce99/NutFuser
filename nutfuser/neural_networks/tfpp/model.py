@@ -280,8 +280,10 @@ class LidarCenterNet(nn.Module):
         else:
             self.speed_weights = torch.ones_like(torch.tensor(self.config.target_speed_weights))
 
-        self.semantic_weights = torch.tensor(self.config.semantic_weights)
-        self.bev_semantic_weights = torch.tensor(self.config.bev_semantic_weights)
+        if self.config.use_semantic:
+            self.semantic_weights = torch.tensor(self.config.semantic_weights)
+        if self.config.use_bev_semantic:
+            self.bev_semantic_weights = torch.tensor(self.config.bev_semantic_weights)
 
         if self.config.use_label_smoothing:
             label_smoothing = self.config.label_smoothing_alpha
@@ -294,10 +296,12 @@ class LidarCenterNet(nn.Module):
         else:
             self.loss_speed = nn.CrossEntropyLoss(weight=self.speed_weights, label_smoothing=label_smoothing)
 
-        self.loss_semantic = nn.CrossEntropyLoss(weight=self.semantic_weights, label_smoothing=label_smoothing)
-        self.loss_bev_semantic = nn.CrossEntropyLoss(weight=self.bev_semantic_weights,
-                                                     label_smoothing=label_smoothing,
-                                                     ignore_index=-1)
+        if self.config.use_semantic:
+            self.loss_semantic = nn.CrossEntropyLoss(weight=self.semantic_weights, label_smoothing=label_smoothing)
+        if self.config.use_bev_semantic:
+            self.loss_bev_semantic = nn.CrossEntropyLoss(weight=self.bev_semantic_weights,
+                                                         label_smoothing=label_smoothing,
+                                                         ignore_index=-1)
         if self.config.multi_wp_output:
             self.selection_loss = nn.BCEWithLogitsLoss()
 
