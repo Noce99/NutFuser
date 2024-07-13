@@ -636,8 +636,8 @@ def main():
                      cur_epoch=start_epoch,
                      scheduler=scheduler,
                      scaler=scaler)
-
-    print(f"Training starting from epoch {trainer.cur_epoch} and finishing at epoch {args.epochs}!")
+    if rank == 0:
+        print(f"Training starting from epoch {trainer.cur_epoch} and finishing at epoch {args.epochs}!")
     for epoch in range(trainer.cur_epoch, args.epochs):
         # Update the seed depending on the epoch so that the distributed
         # sampler will use different shuffles across different epochs
@@ -755,11 +755,23 @@ class Engine(object):
         else:
             rgb = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
 
-        semantic_label = F.one_hot(data["semantic_0"][:, :, :, 0].type(torch.LongTensor), 8).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
-        bev_semantic_label = F.one_hot(torch.rot90(data["bev_semantic"], 3, [1, 2])[:, :, :, 0].type(torch.LongTensor), self.config.num_bev_semantic_classes).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
-        depth_label = (data["depth_0"][:, :, :, 0]/255).contiguous().to(self.device, dtype=torch.float32)
+        if self.config.use_semantic:
+            semantic_label = F.one_hot(data["semantic_0"][:, :, :, 0].type(torch.LongTensor), 8).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+        else:
+            semantic_label = None
+        if self.config.use_bev_semantic:
+            bev_semantic_label = F.one_hot(torch.rot90(data["bev_semantic"], 3, [1, 2])[:, :, :, 0].type(torch.LongTensor), self.config.num_bev_semantic_classes).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+        else:
+            bev_semantic_label = None
+        if self.config.use_depth:
+            depth_label = (data["depth_0"][:, :, :, 0]/255).contiguous().to(self.device, dtype=torch.float32)
+        else:
+            depth_label = None
         lidar = data["bev_lidar"][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
-        flow_label = (data["optical_flow_0"][:, :, :, :2] / 2**15 - 1).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+        if self.config.use_flow:
+            flow_label = (data["optical_flow_0"][:, :, :, :2] / 2**15 - 1).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+        else:
+            flow_label = None
 
         if self.config.use_controller_input_prediction:
             target_point = data["targetpoint"].to(self.device, dtype=torch.float32)
@@ -776,7 +788,7 @@ class Engine(object):
             target_point = None
             command = None
             ego_vel = None
-        
+
         pred_wp,\
         pred_target_speed,\
         pred_checkpoint,\
@@ -926,26 +938,32 @@ class Engine(object):
                                     target_point=target_point,
                                     ego_vel=ego_vel,
                                     command=command)
+            if self.config.use_depth:
+                pred_depth = (pred_depth[0, :, :].detach().cpu().numpy()*255).astype(np.uint8)
+            if self.config.use_semantic:
+                pred_semantic = torch.argmax(pred_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
+            if self.config.use_bev_semantic:
+                pred_bev_semantic = torch.argmax(pred_bev_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
 
-            pred_depth = (pred_depth[0, :, :].detach().cpu().numpy()*255).astype(np.uint8)
-            pred_semantic = torch.argmax(pred_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
-            pred_bev_semantic = torch.argmax(pred_bev_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
             if self.config.use_flow:
                 pred_flow = ((pred_flow + 1)*(2**15)).permute(0, 2, 3, 1)[0, :, :, :].contiguous().detach().cpu().numpy()
 
-            depth_comparison = np.zeros((pred_depth.shape[0]*2, pred_depth.shape[1]), dtype=np.uint8)
-            depth_comparison[0:pred_depth.shape[0], :] = pred_depth
-            depth_comparison[pred_depth.shape[0]:, :] = data["depth_0"][:, :, 0]
+            if self.config.use_depth:
+                depth_comparison = np.zeros((pred_depth.shape[0]*2, pred_depth.shape[1]), dtype=np.uint8)
+                depth_comparison[0:pred_depth.shape[0], :] = pred_depth
+                depth_comparison[pred_depth.shape[0]:, :] = data["depth_0"][:, :, 0]
 
-            semantic_comparison = np.zeros((pred_semantic.shape[0]*2, pred_semantic.shape[1]), dtype=np.uint8)
-            semantic_comparison[0:pred_semantic.shape[0], :] = pred_semantic
-            semantic_comparison[pred_depth.shape[0]:, :] = data["semantic_0"][:, :, 0]
+            if self.config.use_semantic:
+                semantic_comparison = np.zeros((pred_semantic.shape[0]*2, pred_semantic.shape[1]), dtype=np.uint8)
+                semantic_comparison[0:pred_semantic.shape[0], :] = pred_semantic
+                semantic_comparison[pred_semantic.shape[0]:, :] = data["semantic_0"][:, :, 0]
 
-            bev_semantic_comparison = np.zeros((pred_bev_semantic.shape[0]*2, pred_bev_semantic.shape[1], 3), dtype=np.uint8)
-            pred_bev_semantic = np.rot90(pred_bev_semantic, 1)
-            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 0] = pred_bev_semantic
-            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 1] = pred_bev_semantic
-            bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 2] = pred_bev_semantic
+            if self.config.use_bev_semantic:
+                bev_semantic_comparison = np.zeros((pred_bev_semantic.shape[0]*2, pred_bev_semantic.shape[1], 3), dtype=np.uint8)
+                pred_bev_semantic = np.rot90(pred_bev_semantic, 1)
+                bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 0] = pred_bev_semantic
+                bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 1] = pred_bev_semantic
+                bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 2] = pred_bev_semantic
 
             rgb_ground_truth = np.zeros((data["bev_semantic"].shape[0], data["bev_semantic"].shape[1], 3))
             rgb_ground_truth[:, :] = data["bev_semantic"]
@@ -962,7 +980,8 @@ class Engine(object):
                 cv2.putText(rgb_ground_truth, f"{list_target_speed[0]:.2f}, {list_target_speed[1]:.2f}, {list_target_speed[2]:.2f}, {list_target_speed[3]:.2f}", (0, 128+60), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
                 cv2.putText(rgb_ground_truth, f"{list_predicted_speed[0]:.2f}, {list_predicted_speed[1]:.2f}, {list_predicted_speed[2]:.2f}, {list_predicted_speed[3]:.2f}", (0, 128+90), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 0, 255), thickness=2, lineType=cv2.LINE_AA)
 
-            bev_semantic_comparison[pred_bev_semantic.shape[0]:, :, :] = rgb_ground_truth # np.rot90(data["bev_semantic"][:, :, 0], 3)
+            if self.config.use_bev_semantic:
+                bev_semantic_comparison[pred_bev_semantic.shape[0]:, :, :] = rgb_ground_truth
 
             if self.config.use_flow:
                 flow_comparison = np.zeros((pred_flow.shape[0]*2, pred_flow.shape[1], 3), dtype=np.uint8)
@@ -971,9 +990,12 @@ class Engine(object):
                 flow_comparison[0:pred_flow.shape[0], :, :] = utils.optical_flow_to_human(pred_flow)
                 flow_comparison[pred_flow.shape[0]:, :, :] = utils.optical_flow_to_human(data["optical_flow_0"][:, :, :2])
 
-            cv2.imwrite(os.path.join(folder_path, f"depth_{k}.png"), depth_comparison)
-            cv2.imwrite(os.path.join(folder_path, f"semantic_{k}.png"), semantic_comparison*30)
-            cv2.imwrite(os.path.join(folder_path, f"bev_semantic_{k}.png"), bev_semantic_comparison*30)
+            if self.config.use_depth:
+                cv2.imwrite(os.path.join(folder_path, f"depth_{k}.png"), depth_comparison)
+            if self.config.use_semantic:
+                cv2.imwrite(os.path.join(folder_path, f"semantic_{k}.png"), semantic_comparison*30)
+            if self.config.use_bev_semantic:
+                cv2.imwrite(os.path.join(folder_path, f"bev_semantic_{k}.png"), bev_semantic_comparison*30)
             if self.config.use_flow:
                 cv2.imwrite(os.path.join(folder_path, f"flow_{k}.png"), flow_comparison)
             k += 1
