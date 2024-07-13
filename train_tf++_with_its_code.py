@@ -81,6 +81,11 @@ def get_arguments():
         help='If we want to use the bev semantic! (default: False)',
         action='store_true'
     )
+    argparser.add_argument(
+        '--single_GPU',
+        help='Use just a single GPU! (default: False)',
+        action='store_true'
+    )
     args = argparser.parse_args()
     # THERE I CHECK THE ARGUMENTS
     if args.dataset_validation is None:
@@ -157,6 +162,9 @@ if __name__ == "__main__":
 
     num_of_gpu = torch.cuda.device_count()
     print(f"Found out {num_of_gpu} GPUs!")
+    if args.single_GPU:
+        print("But using just 1 GPU as requested!")
+        num_of_gpu = 1
 
     if args.just_backbone:
         train_control_network = 0
