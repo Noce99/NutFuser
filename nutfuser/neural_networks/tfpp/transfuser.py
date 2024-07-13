@@ -128,11 +128,10 @@ class TransfuserBackbone(nn.Module):
                 self.num_features = self.image_encoder.feature_info.info[start_index + 3]['num_chs'] + \
                                     self.lidar_encoder.feature_info.info[start_index + 3]['num_chs']
 
-        # FPN fusion
-        channel = self.config.bev_features_chanels
-        self.relu = nn.ReLU(inplace=True)
         # top down
-        if self.config.detect_boxes or self.config.use_bev_semantic: # <------------------------ True or True
+        if self.config.detect_boxes or self.config.use_bev_semantic:
+            channel = self.config.bev_features_chanels
+            self.relu = nn.ReLU(inplace=True)
             self.upsample = nn.Upsample(scale_factor=self.config.bev_upsample_factor, mode='bilinear', align_corners=False)
             self.upsample2 = nn.Upsample(size=(self.config.lidar_resolution_height // self.config.bev_down_sample_factor,
                                                self.config.lidar_resolution_width // self.config.bev_down_sample_factor),
@@ -193,12 +192,12 @@ class TransfuserBackbone(nn.Module):
             x4 = lidar_features
 
         image_feature_grid = None
-        if self.config.use_semantic or self.config.use_depth: # <------------------------ True or True
+        if self.config.use_semantic or self.config.use_depth:
             image_feature_grid = image_features
 
-        if self.config.transformer_decoder_join: # <------------------------ True
+        if self.config.transformer_decoder_join:
             fused_features = lidar_features
-        else: # NOT ENTERING
+        else:
             image_features = self.global_pool_img(image_features)
             image_features = torch.flatten(image_features, 1)
             lidar_features = self.global_pool_lidar(lidar_features)
@@ -210,7 +209,7 @@ class TransfuserBackbone(nn.Module):
             else:
                 fused_features = torch.cat((image_features, lidar_features), dim=1)
 
-        if self.config.detect_boxes or self.config.use_bev_semantic: # <------------------------ True or True
+        if self.config.detect_boxes or self.config.use_bev_semantic:
             features = self.top_down(x4)
         else:
             features = None

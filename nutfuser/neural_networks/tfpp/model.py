@@ -111,7 +111,8 @@ class LidarCenterNet(nn.Module):
                           bias=True),
                 nn.Upsample(size=(self.config.lidar_resolution_height, self.config.lidar_resolution_width),
                             mode='bilinear',
-                            align_corners=False))
+                            align_corners=False)
+            )
 
             # Computes which pixels are visible in the camera. We mask the others.
             _, valid_voxels = t_u.create_projection_grid(self.config)
@@ -120,7 +121,8 @@ class LidarCenterNet(nn.Module):
             # Analogous to transpose after the LiDAR histogram
             valid_bev_pixels = torch.transpose(valid_bev_pixels, 2, 3).contiguous()
             valid_bev_pixels_inv = 1.0 - valid_bev_pixels
-            # Register as parameter so that it will automatically be moved to the correct GPU with the rest of the network
+            # Register as parameter so that it will automatically
+            # be moved to the correct GPU with the rest of the network
             self.valid_bev_pixels = nn.Parameter(valid_bev_pixels, requires_grad=False)
             self.valid_bev_pixels_inv = nn.Parameter(valid_bev_pixels_inv, requires_grad=False)
 
@@ -144,18 +146,18 @@ class LidarCenterNet(nn.Module):
                   scale_factor_0=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_0,
                   scale_factor_1=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_1)
 
-        if self.config.use_controller_input_prediction:# <------------ True
-            if self.config.transformer_decoder_join: # <------------------------ True
+        if self.config.use_controller_input_prediction:
+            if self.config.transformer_decoder_join:
                 ts_input_channel = self.config.gru_input_size
             else:
                 ts_input_channel = self.config.gru_hidden_size
             self.target_speed_network = nn.Sequential(nn.Linear(ts_input_channel, ts_input_channel), nn.ReLU(inplace=True),
                                                       nn.Linear(ts_input_channel, len(config.target_speeds)))
 
-        if self.config.use_controller_input_prediction or self.config.use_wp_gru: # <------------ True or False
-            if self.config.transformer_decoder_join: # <------------------------ True
+        if self.config.use_controller_input_prediction or self.config.use_wp_gru:
+            if self.config.transformer_decoder_join:
                 decoder_norm = nn.LayerNorm(self.config.gru_input_size)
-                if self.config.tp_attention: # NOT ENTERING
+                if self.config.tp_attention:
                     self.tp_encoder = nn.Sequential(nn.Linear(2, 128), nn.ReLU(inplace=True),
                                                     nn.Linear(128, self.config.gru_input_size))
                     self.tp_pos_embed = nn.Parameter(torch.zeros(1, self.config.gru_input_size))
@@ -167,7 +169,7 @@ class LidarCenterNet(nn.Module):
                     self.join = TransformerDecoderWithAttention(decoder_layer,
                                                                 num_layers=self.config.num_transformer_decoder_layers,
                                                                 norm=decoder_norm)
-                else: # <-------------------------
+                else:
                     decoder_layer = nn.TransformerDecoderLayer(self.config.gru_input_size,
                                                                self.config.num_decoder_heads,
                                                                activation=nn.GELU(),
@@ -181,7 +183,7 @@ class LidarCenterNet(nn.Module):
 
                 self.change_channel = nn.Conv2d(self.backbone.num_features, self.config.gru_input_size, kernel_size=1)
 
-                if self.config.use_wp_gru:# NOT ENTERING
+                if self.config.use_wp_gru:
                     if self.config.multi_wp_output:
                         self.wp_query = nn.Parameter(
                             torch.zeros(1, 2 * (config.pred_len // self.config.wp_dilation) + 1, self.config.gru_input_size))
@@ -204,7 +206,7 @@ class LidarCenterNet(nn.Module):
                                                                           waypoints=(config.pred_len // self.config.wp_dilation),
                                                                           target_point_size=target_point_size)
 
-                if self.config.use_controller_input_prediction: # <------------ True
+                if self.config.use_controller_input_prediction:
                     # + 1 for the target speed token
                     self.checkpoint_query = nn.Parameter(
                         torch.zeros(1, self.config.predict_checkpoint_len + 1, self.config.gru_input_size))
@@ -231,22 +233,22 @@ class LidarCenterNet(nn.Module):
                     nn.ReLU(inplace=True),
                 )
 
-                if self.config.use_wp_gru:# NOT ENTERING
+                if self.config.use_wp_gru:
                     self.wp_decoder = GRUWaypointsPredictorTransFuser(self.config,
                                                                       pred_len=(config.pred_len // self.config.wp_dilation),
                                                                       hidden_size=self.config.gru_hidden_size,
                                                                       target_point_size=target_point_size)
 
-                if self.config.use_controller_input_prediction: # <------------ True
+                if self.config.use_controller_input_prediction:
                     self.checkpoint_decoder = GRUWaypointsPredictorTransFuser(self.config,
                                                                               pred_len=self.config.predict_checkpoint_len,
                                                                               hidden_size=self.config.gru_hidden_size,
                                                                               target_point_size=target_point_size)
 
-        if self.config.use_wp_gru or self.config.use_controller_input_prediction: # <------------ False or True
-            if self.extra_sensors: # <------------ True
+        if self.config.use_wp_gru or self.config.use_controller_input_prediction:
+            if self.extra_sensors:
                 extra_size = 0
-                if self.config.use_velocity: # <------------ True
+                if self.config.use_velocity:
                     # Lazy version of normalizing the input over the dataset statistics.
                     self.velocity_normalization = nn.BatchNorm1d(1, affine=False)
                     extra_size += 1
@@ -316,20 +318,10 @@ class LidarCenterNet(nn.Module):
             nn.init.uniform_(self.tp_pos_embed)
 
     def forward(self, rgb, lidar_bev, target_point, ego_vel, command):
-
-        # Noce
-        # print(f"RGB: {rgb.shape} [{rgb.min()}; {rgb.max()}]")
-        # print(f"Lidar BEV: {lidar_bev.shape} [{lidar_bev.min()}; {lidar_bev.max()}]")
-        # print(f"Target Point: {target_point.shape} [{target_point.min()}; {target_point.max()}]")
-        # print(f"Ego Velocity: {ego_vel.shape} [{ego_vel.min()}; {ego_vel.max()}]")
-        # print(f"Command: {command.shape} [{command.min()}; {command.max()}]")
-        # ----
-
-
         bs = rgb.shape[0]
         # print(self.config.backbone) # transFuser
 
-        if self.config.backbone == 'transFuser': # <--------
+        if self.config.backbone == 'transFuser':
             bev_feature_grid, fused_features, image_feature_grid = self.backbone(rgb, lidar_bev)
         elif self.config.backbone == 'aim':
             fused_features, image_feature_grid = self.backbone(rgb)
@@ -339,13 +331,6 @@ class LidarCenterNet(nn.Module):
             raise ValueError('The chosen vision backbone does not exist. '
                              'The options are: transFuser, aim, bev_encoder')
 
-        # AFTER BACKBONE
-        """
-        bev_feature_grid = torch.Size([1, 64, 64, 64])
-        fused_features = torch.Size([1, 1512, 8, 8])
-        image_feature_grid = torch.Size([1, 1512, 8, 32])
-        """
-
         pred_wp = None
         pred_target_speed = None
         pred_checkpoint = None
@@ -353,33 +338,33 @@ class LidarCenterNet(nn.Module):
         pred_wp_1 = None
         selected_path = None
 
-        if self.config.use_wp_gru or self.config.use_controller_input_prediction: # <------- False or True
-            if self.config.transformer_decoder_join: # <------------------------ True
+        if self.config.use_wp_gru or self.config.use_controller_input_prediction:
+            if self.config.transformer_decoder_join:
                 fused_features = self.change_channel(fused_features)
                 fused_features = fused_features + self.encoder_pos_encoding(fused_features)
                 fused_features = torch.flatten(fused_features, start_dim=2)
-                if self.config.tp_attention: # NOT ENTERING
+                if self.config.tp_attention:
                     num_pixel_tokens = fused_features.shape[2]
 
             # Concatenate extra sensor information
-            if self.extra_sensors: # <------------ True
+            if self.extra_sensors:
                 extra_sensors = []
-                if self.config.use_velocity: # <------------ True
+                if self.config.use_velocity:
                     extra_sensors.append(self.velocity_normalization(ego_vel))
-                if self.config.use_discrete_command: # <------------ True
+                if self.config.use_discrete_command:
                     extra_sensors.append(command)
                 extra_sensors = torch.cat(extra_sensors, axis=1)
                 extra_sensors = self.extra_sensor_encoder(extra_sensors)
 
-                if self.config.transformer_decoder_join: # <------------------------ True
+                if self.config.transformer_decoder_join:
                     extra_sensors = extra_sensors + self.extra_sensor_pos_embed.repeat(bs, 1)
                     fused_features = torch.cat((fused_features, extra_sensors.unsqueeze(2)), axis=2)
                 else: # NOT ENTERING
                     fused_features = torch.cat((fused_features, extra_sensors), axis=1)
 
-            if self.config.transformer_decoder_join: # <------------------------ True
+            if self.config.transformer_decoder_join:
                 fused_features = torch.permute(fused_features, (0, 2, 1))
-                if self.config.use_wp_gru: # NOT ENTERING
+                if self.config.use_wp_gru:
                     if self.config.multi_wp_output:
                         joined_wp_features = self.join(self.wp_query.repeat(bs, 1, 1), fused_features)
                         num_wp = (self.config.pred_len // self.config.wp_dilation)
@@ -389,44 +374,39 @@ class LidarCenterNet(nn.Module):
                     else:
                         joined_wp_features = self.join(self.wp_query.repeat(bs, 1, 1), fused_features)
                         pred_wp = self.wp_decoder(joined_wp_features, target_point)
-                if self.config.use_controller_input_prediction:# <------------ True
-                    if self.config.tp_attention: # NOT ENTERING
+                if self.config.use_controller_input_prediction:
+                    if self.config.tp_attention:
                         tp_token = self.tp_encoder(target_point)
                         tp_token = tp_token + self.tp_pos_embed
                         fused_features = torch.cat((fused_features, tp_token.unsqueeze(1)), axis=1)
-                        joined_checkpoint_features, attention = self.join(self.checkpoint_query.repeat(bs, 1, 1), fused_features)
+                        joined_checkpoint_features, attention = self.join(self.checkpoint_query.repeat(bs, 1, 1),
+                                                                          fused_features)
                         gru_attention = attention[:, :self.config.predict_checkpoint_len]
                         # Average attention for the WP tokens
                         gru_attention = torch.mean(gru_attention, dim=1)[0]
                         vision_attention = torch.sum(gru_attention[:num_pixel_tokens])
                         add = 0
-                        if self.extra_sensors: # <------------ True
+                        if self.extra_sensors:
                             add = 1
                             speed_attention = gru_attention[num_pixel_tokens:num_pixel_tokens + add]
                         tp_attention = gru_attention[num_pixel_tokens + add:]
                         attention_weights = [vision_attention.item(), speed_attention.item(), tp_attention.item()]
-                    else: # <-------------------
-                        # print(f"checkpoint_query = [{self.checkpoint_query.shape}] [{type(self.checkpoint_query)}]")
-                        # print(f"checkpoint_query.repeat = [{self.checkpoint_query.repeat(bs, 1, 1).shape}] [{type(self.checkpoint_query.repeat(bs, 1, 1))}]")
-                        # print(f"bs = [{bs}]")
-
+                    else:
                         joined_checkpoint_features = self.join(self.checkpoint_query.repeat(bs, 1, 1), fused_features)
 
                     gru_features = joined_checkpoint_features[:, :self.config.predict_checkpoint_len]
                     target_speed_features = joined_checkpoint_features[:, self.config.predict_checkpoint_len]
                     pred_checkpoint = self.checkpoint_decoder(gru_features, target_point)
-                    # print(f"pred_checkpoint = {pred_checkpoint.shape}")
                     pred_target_speed = self.target_speed_network(target_speed_features)
-                    # print(f"pred_target_speed = {pred_target_speed.shape}")
 
-            else: # NOT ENTERING
+            else:
                 joined_features = self.join(fused_features)
                 gru_features = joined_features
                 target_speed_features = joined_features[:, :self.config.gru_hidden_size]
 
-                if self.config.use_wp_gru:# NOT ENTERING
+                if self.config.use_wp_gru:
                     pred_wp = self.wp_decoder(gru_features, target_point)
-                if self.config.use_controller_input_prediction:# <------------ True
+                if self.config.use_controller_input_prediction:
                     pred_checkpoint = self.checkpoint_decoder(gru_features, target_point)
                     pred_target_speed = self.target_speed_network(target_speed_features)
 
@@ -452,9 +432,7 @@ class LidarCenterNet(nn.Module):
 
         pred_bounding_box = None
         if self.config.detect_boxes:
-            pred_bounding_box = self.head(bev_feature_grid) # tuple of 7 elements
-
-        # NOCE
+            pred_bounding_box = self.head(bev_feature_grid)  # tuple of 7 elements
 
         # SHOWING IMAGES
         """
