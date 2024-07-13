@@ -82,6 +82,11 @@ def get_arguments():
         action='store_true'
     )
     argparser.add_argument(
+        '--use_bounding_boxes',
+        help='If we want to use the bounding boxes! (default: False)',
+        action='store_true'
+    )
+    argparser.add_argument(
         '--single_GPU',
         help='Use just a single GPU! (default: False)',
         action='store_true'
@@ -191,6 +196,11 @@ if __name__ == "__main__":
     else:
         use_bev_semantic = 0
 
+    if args.use_bounding_boxes:
+        use_bounding_boxes = 1
+    else:
+        use_bounding_boxes = 0
+
     with open(output_log, 'w') as logs_file:
         train_process = subprocess.Popen(
             [shell_train_path,
@@ -208,7 +218,8 @@ if __name__ == "__main__":
              f"{use_abstract_bev_semantic}",
              f"{use_semantic}",
              f"{use_depth}",
-             f"{use_bev_semantic}"],
+             f"{use_bev_semantic}",
+             f"{use_bounding_boxes}"],
             universal_newlines=True,
             stdout=logs_file,
             stderr=logs_file,

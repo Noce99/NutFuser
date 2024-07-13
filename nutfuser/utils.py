@@ -2,7 +2,6 @@ from termcolor import colored
 import numpy as np
 import math
 import cv2
-import os
 import torch
 import xml.etree.ElementTree as ET
 
@@ -16,28 +15,33 @@ import nutfuser.config as config
 from nutfuser.neural_networks.tfpp_config import GlobalConfig
 from nutfuser.neural_networks.model import LidarCenterNet
 
+
 def color_error_string(string):
-    return colored(string, "red", attrs=["bold"]) # , "blink"
+    return colored(string, "red", attrs=["bold"])  # , "blink"
+
 
 def color_info_string(string):
     return colored(string, "yellow", attrs=["bold"])
 
+
 def color_info_success(string):
     return colored(string, "green", attrs=["bold"])
 
+
 def get_a_title(string, color):
-    line = "#"*(len(string)+2)
+    line = "#" * (len(string) + 2)
     final_string = line + "\n#" + string + "#\n" + line
     return colored(final_string, color, attrs=["bold"])
 
 
 def convert_gps_to_carla(gps_array):
     position_carla_coord = gps_array * np.array([111324.60662786, 111319.490945, 1])
-    position_carla_coord = np.concatenate([  np.expand_dims( position_carla_coord[:, 1], 1),
-                                             np.expand_dims(-position_carla_coord[:, 0], 1),
-                                             np.expand_dims( position_carla_coord[:, 2], 1)],
+    position_carla_coord = np.concatenate([np.expand_dims(position_carla_coord[:, 1], 1),
+                                           np.expand_dims(-position_carla_coord[:, 0], 1),
+                                           np.expand_dims(position_carla_coord[:, 2], 1)],
                                           1)
     return position_carla_coord
+
 
 def lat_lon_to_normalize_carla_cords(gps_array, origin=None, den_x=None, den_y=None, min_x=None, min_y=None):
     points = convert_gps_to_carla(gps_array)
@@ -58,11 +62,12 @@ def lat_lon_to_normalize_carla_cords(gps_array, origin=None, den_x=None, den_y=N
         return points, origin, den_x, den_y, min_x, min_y
     if den_x > den_y:
         points[:, 0] = (points[:, 0] - min_x) / denominator
-        points[:, 1] = (points[:, 1] - min_y + (den_x-den_y)/2) / denominator
+        points[:, 1] = (points[:, 1] - min_y + (den_x - den_y) / 2) / denominator
     else:
-        points[:, 0] = (points[:, 0] - min_x + (den_y-den_x)/2) / denominator
+        points[:, 0] = (points[:, 0] - min_x + (den_y - den_x) / 2) / denominator
         points[:, 1] = (points[:, 1] - min_y) / denominator
     return points, origin, den_x, den_y, min_x, min_y
+
 
 def calculate_point_each_meter(points, den_x, den_y):
     denominator = max(den_x, den_y)
@@ -71,7 +76,8 @@ def calculate_point_each_meter(points, den_x, den_y):
     subframe_position = []
     tmp_total_distance = 0
     for i in range(len(points_in_m) - 1):
-        distance = math.sqrt((points_in_m[i, 0] - points_in_m[i+1, 0])**2 + (points_in_m[i, 1] - points_in_m[i+1, 1])**2)
+        distance = math.sqrt(
+            (points_in_m[i, 0] - points_in_m[i + 1, 0]) ** 2 + (points_in_m[i, 1] - points_in_m[i + 1, 1]) ** 2)
         tmp_total_distance += distance
         if tmp_total_distance > 1.0:
             points_with_equal_distance.append(points[i])
@@ -79,20 +85,22 @@ def calculate_point_each_meter(points, den_x, den_y):
             tmp_total_distance = 0
     return np.array(points_with_equal_distance), subframe_position
 
+
 def optical_flow_to_human(flow):
-    flow = (flow - 2**15) / 64.0
+    flow = (flow - 2 ** 15) / 64.0
     H = flow.shape[0]
     W = flow.shape[1]
-    
+
     output = flow_to_image(flow, clip_flow=60)
     output *= 255
     return output
 
+
 def optical_flow_to_human_with_path(optical_flow_path):
-    flow = cv2.imread(optical_flow_path, cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
+    flow = cv2.imread(optical_flow_path, cv2.IMREAD_ANYDEPTH | cv2.IMREAD_COLOR)
     flow = flow.astype(np.float32)
     flow = flow[:, :, :2]
-    
+
     return optical_flow_to_human(flow)
 
 
@@ -100,29 +108,29 @@ def optical_flow_to_human_slow(optical_flow_path):
     """
     Not used anymore! Keeping just for history!
     """
-    flow = cv2.imread(optical_flow_path, cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
+    flow = cv2.imread(optical_flow_path, cv2.IMREAD_ANYDEPTH | cv2.IMREAD_COLOR)
     flow = flow.astype(np.float32)
     flow = flow[:, :, :2]
-    flow = (flow - 2**15) / 64.0
+    flow = (flow - 2 ** 15) / 64.0
     H = flow.shape[0]
     W = flow.shape[1]
     flow[:, :, 0] /= H * 0.5
     flow[:, :, 1] /= W * 0.5
     output = np.zeros((H, W, 3), dtype=np.uint8)
-    rad2ang = 180./math.pi
+    rad2ang = 180. / math.pi
     for i in range(H):
         for j in range(W):
             vx = flow[i, j, 0]
             vy = flow[i, j, 1]
-            angle = 180. + math.atan2(vy, vx)*rad2ang
+            angle = 180. + math.atan2(vy, vx) * rad2ang
             if angle < 0:
                 angle = 360. + angle
                 pass
             angle = math.fmod(angle, 360.)
-            norm = math.sqrt(vx*vx + vy*vy)
+            norm = math.sqrt(vx * vx + vy * vy)
             shift = 0.999
-            a = 1/math.log(0.1 + shift)
-            raw_intensity = a*math.log(norm + shift)
+            a = 1 / math.log(0.1 + shift)
+            raw_intensity = a * math.log(norm + shift)
             if raw_intensity < 0.:
                 intensity = 0.
             elif raw_intensity > 1.:
@@ -131,9 +139,9 @@ def optical_flow_to_human_slow(optical_flow_path):
                 intensity = raw_intensity
             S = 1.
             V = intensity
-            H_60 = angle*1./60.
+            H_60 = angle * 1. / 60.
             C = V * S
-            X = C*(1. - abs(math.fmod(H_60, 2.) - 1.))
+            X = C * (1. - abs(math.fmod(H_60, 2.) - 1.))
             m = V - C
             r = 0.
             g = 0.
@@ -167,32 +175,35 @@ def optical_flow_to_human_slow(optical_flow_path):
                 r = 1
                 g = 1
                 b = 1
-            R = int((r+m)*255)
-            G = int((g+m)*255)
-            B = int((b+m)*255)
+            R = int((r + m) * 255)
+            G = int((g + m) * 255)
+            B = int((b + m) * 255)
             output[i, j, 0] = R
             output[i, j, 1] = G
             output[i, j, 2] = B
     return output
 
+
 class NutException(Exception):
     """
     Exception Raised during Carla's StartUp!
     """
+
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
+
 
 def check_dataset_folder(dataset_path):
     all_files = os.listdir(dataset_path)
     camera_indexes = [int(el[len("rgb_A_"):]) for el in all_files if "rgb_A_" in el]
 
-    folder_that_should_be_there =  [(f"rgb_A_{i}", ".jpg") for i in camera_indexes] +\
-                        [(f"rgb_B_{i}", ".jpg") for i in camera_indexes] +\
-                        [(f"depth_{i}", ".png") for i in camera_indexes] +\
-                        [(f"optical_flow_{i}", ".png") for i in camera_indexes] +\
-                        [(f"semantic_{i}", ".png") for i in camera_indexes] +\
-                        [("bev_semantic", ".png"),      ("bev_lidar", ".png")]
+    folder_that_should_be_there = [(f"rgb_A_{i}", ".jpg") for i in camera_indexes] + \
+                                  [(f"rgb_B_{i}", ".jpg") for i in camera_indexes] + \
+                                  [(f"depth_{i}", ".png") for i in camera_indexes] + \
+                                  [(f"optical_flow_{i}", ".png") for i in camera_indexes] + \
+                                  [(f"semantic_{i}", ".png") for i in camera_indexes] + \
+                                  [("bev_semantic", ".png"), ("bev_lidar", ".png")]
     max_index = None
     for folder, extention in folder_that_should_be_there:
         if folder not in all_files:
@@ -204,12 +215,16 @@ def check_dataset_folder(dataset_path):
                 max_index = max(all_index)
             for i in range(0, max_index):
                 if i not in all_index:
-                    raise Exception(color_error_string(f"Missing frame {i} in '{os.path.join(dataset_path, folder)}'\n[{all_frames}]"))
+                    raise Exception(color_error_string(
+                        f"Missing frame {i} in '{os.path.join(dataset_path, folder)}'\n[{all_frames}]"))
         except:
-            raise Exception(color_error_string(f"Some strange frame name inside '{os.path.join(dataset_path, folder)}'\n[{all_frames}]"))
+            raise Exception(color_error_string(
+                f"Some strange frame name inside '{os.path.join(dataset_path, folder)}'\n[{all_frames}]"))
     return camera_indexes, max_index
 
+
 import time
+
 
 def create_validation_video(folders_path):
     print(color_info_string(f"Creating Validation Video in {folders_path}..."))
@@ -222,13 +237,15 @@ def create_validation_video(folders_path):
         int_all_frames.sort()
         example_of_frame = cv2.imread(os.path.join(full_folder_path, all_frames[0]))
         exctention = all_frames[0][-4:]
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
-        video = cv2.VideoWriter(os.path.join(folders_path, f"{folder}.mp4"), fourcc, 15, (example_of_frame.shape[1], example_of_frame.shape[0]))
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        video = cv2.VideoWriter(os.path.join(folders_path, f"{folder}.mp4"), fourcc, 15,
+                                (example_of_frame.shape[1], example_of_frame.shape[0]))
         for frame in tqdm(int_all_frames, desc=folder):
             img = cv2.imread(os.path.join(full_folder_path, f"{frame}{exctention}"))
             video.write(img)
         video.release()
     print(color_info_success(f"Created Validation Video in {folders_path}!"))
+
 
 def create_compariso_validation_video(folders_path_A, folders_path_B, where_to_save):
     print(color_info_string(f"Creating Comparison Video in {where_to_save}..."))
@@ -253,16 +270,18 @@ def create_compariso_validation_video(folders_path_A, folders_path_B, where_to_s
         example_of_frame = cv2.imread(os.path.join(full_folder_path_A, all_frames_A[0]))
         exctention = all_frames_A[0][-4:]
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        video = cv2.VideoWriter(os.path.join(where_to_save, f"comparison_{folder}.mp4"), fourcc, 15, (example_of_frame.shape[1], int((example_of_frame.shape[0]/2)*3)))
+        video = cv2.VideoWriter(os.path.join(where_to_save, f"comparison_{folder}.mp4"), fourcc, 15,
+                                (example_of_frame.shape[1], int((example_of_frame.shape[0] / 2) * 3)))
         for frame in tqdm(int_all_frames, desc=f"comparison_{folder}"):
             img_A = cv2.imread(os.path.join(full_folder_path_A, f"{frame}{exctention}"))
             img_B = cv2.imread(os.path.join(full_folder_path_B, f"{frame}{exctention}"))
-            img = np.zeros(shape=(int((img_A.shape[0]/2)*3), img_A.shape[1], img_A.shape[2]), dtype=img_A.dtype)
+            img = np.zeros(shape=(int((img_A.shape[0] / 2) * 3), img_A.shape[1], img_A.shape[2]), dtype=img_A.dtype)
             img[:img_A.shape[0], :] = img_A
-            img[img_A.shape[0]//2:, :] = img_B
+            img[img_A.shape[0] // 2:, :] = img_B
             video.write(img)
         video.release()
     print(color_info_success(f"Created Comparison Video in {where_to_save}!"))
+
 
 def print_nvidia_gpu_status_on_log_file(log_file, delay_in_seconds):
     with open(log_file, 'w') as log:
@@ -274,17 +293,17 @@ def print_nvidia_gpu_status_on_log_file(log_file, delay_in_seconds):
         for i in range(deviceCount):
             gpus.append(nvmlDeviceGetHandleByIndex(i))
             log.write(f"\tDevice {i} : {nvmlDeviceGetName(gpus[-1])}\n")
-        used_total = {i:0 for i in range(len(gpus))}
-        total_total = {i:0 for i in range(len(gpus))}
-        free_total = {i:0 for i in range(len(gpus))}
+        used_total = {i: 0 for i in range(len(gpus))}
+        total_total = {i: 0 for i in range(len(gpus))}
+        free_total = {i: 0 for i in range(len(gpus))}
         while True:
             for i in range(100):
                 for i, gpu in enumerate(gpus):
                     info = nvmlDeviceGetMemoryInfo(gpu)
-                    used_total[i] += info.used/10**9
-                    total_total[i] += info.total/10**9
-                    free_total[i] += info.free/10**9
-                time.sleep(delay_in_seconds/100)
+                    used_total[i] += info.used / 10 ** 9
+                    total_total[i] += info.total / 10 ** 9
+                    free_total[i] += info.free / 10 ** 9
+                time.sleep(delay_in_seconds / 100)
             for i, _ in enumerate(gpus):
                 used_total[i] /= 100
                 total_total[i] /= 100
@@ -296,12 +315,14 @@ def print_nvidia_gpu_status_on_log_file(log_file, delay_in_seconds):
                 log.write(f"\t{used_total[i]:.2f} GB / {total_total[i]:.2f} GB [free: {free_total[i]:.2f} GB]\n")
                 log.flush()
 
+
 def lidar_to_histogram_features_tfpp_original(lidar):
     MAX_HIST_POINTS = 5
+
     def splat_points(point_cloud):
         # 256 x 256 grid
-        xbins = np.linspace(-32, 32, 256+1)
-        ybins = np.linspace(-32, 32, 256+1)
+        xbins = np.linspace(-32, 32, 256 + 1)
+        ybins = np.linspace(-32, 32, 256 + 1)
         hist = np.histogramdd(point_cloud[:, :2], bins=(xbins, ybins))[0]
         hist[hist > 5] = 5
         overhead_splat = hist / 5
@@ -309,6 +330,7 @@ def lidar_to_histogram_features_tfpp_original(lidar):
         # Comes from the fact that carla is x front, y right, whereas the image is y front, x right
         # (x height channel, y width channel)
         return overhead_splat.T
+
     # Remove points above the vehicle
     lidar = lidar[lidar[..., 2] < -2.5 + 100]
     lidar = lidar[lidar[..., 2] > -2.5 + 0.2]
@@ -319,7 +341,9 @@ def lidar_to_histogram_features_tfpp_original(lidar):
     features = features.astype(np.uint8)
     return features
 
-def process_array_and_tensor(an_array_or_tensor, denormalize=False, data_dims=2, channels=1, dtype=None, argmax=False, softmax=False):
+
+def process_array_and_tensor(an_array_or_tensor, denormalize=False, data_dims=2, channels=1, dtype=None, argmax=False,
+                             softmax=False):
     if channels == 1:
         expected_dims = data_dims
     else:
@@ -328,14 +352,15 @@ def process_array_and_tensor(an_array_or_tensor, denormalize=False, data_dims=2,
     actual_dims = len(an_array_or_tensor.shape)
     if actual_dims < expected_dims:
         raise NutException(f"The expected dimension [{expected_dims}] is bigger than the actual one {actual_dims}!")
-    
+
     # Denormalization
     if denormalize:
         maximum = an_array_or_tensor.max()
         if maximum <= 1.:
             an_array_or_tensor *= 255
         else:
-            raise NutException(f"Asked to denormalize but seems that the tensor/array is not normalized! [max = {maximum:.3f} > 1.0]")
+            raise NutException(
+                f"Asked to denormalize but seems that the tensor/array is not normalized! [max = {maximum:.3f} > 1.0]")
     # Check if Batch Size is Present
     if an_array_or_tensor.shape[0] == 1 and actual_dims > 1:
         an_array_or_tensor = an_array_or_tensor[0]
@@ -347,18 +372,19 @@ def process_array_and_tensor(an_array_or_tensor, denormalize=False, data_dims=2,
         else:
             raise NutException(f"Asked to apply argmax but it's not a torch.Tensor! [{type(an_array_or_tensor)}]")
 
-
     actual_dims = len(an_array_or_tensor.shape)
     # Check correct ammount of channels
     if channels == 1 and actual_dims > expected_dims:
         an_array_or_tensor = an_array_or_tensor[:, :, 0]
     elif channels != 1:
         if an_array_or_tensor.shape[-1] != channels:
-            raise NutException(f"Wrong number of channels! Expected {channels} but found {an_array_or_tensor.shape[-1]}!")
+            raise NutException(
+                f"Wrong number of channels! Expected {channels} but found {an_array_or_tensor.shape[-1]}!")
 
     actual_dims = len(an_array_or_tensor.shape)
     if actual_dims < expected_dims:
-        raise NutException(f"The expected dimension [{expected_dims}] is bigger than the actual one {actual_dims} after some change!")
+        raise NutException(
+            f"The expected dimension [{expected_dims}] is bigger than the actual one {actual_dims} after some change!")
 
     if isinstance(an_array_or_tensor, torch.Tensor):
         if softmax:
@@ -370,12 +396,15 @@ def process_array_and_tensor(an_array_or_tensor, denormalize=False, data_dims=2,
         else:
             return an_array_or_tensor.contiguous().detach().cpu().numpy()
 
+
 def create_depth_comparison(predicted_depth, label_depth=None):
-    predicted_depth = process_array_and_tensor(predicted_depth, denormalize=True, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
+    predicted_depth = process_array_and_tensor(predicted_depth, denormalize=True, data_dims=2, channels=1,
+                                               dtype=np.uint8, argmax=False)
     if label_depth is not None:
-        label_depth = process_array_and_tensor(label_depth, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
-    
-        depth_comparison = np.zeros((predicted_depth.shape[0]*2, predicted_depth.shape[1]), dtype=np.uint8)
+        label_depth = process_array_and_tensor(label_depth, denormalize=False, data_dims=2, channels=1, dtype=np.uint8,
+                                               argmax=False)
+
+        depth_comparison = np.zeros((predicted_depth.shape[0] * 2, predicted_depth.shape[1]), dtype=np.uint8)
         depth_comparison[0:predicted_depth.shape[0], :] = predicted_depth
         depth_comparison[label_depth.shape[0]:, :] = label_depth
     else:
@@ -384,43 +413,55 @@ def create_depth_comparison(predicted_depth, label_depth=None):
 
     return depth_comparison
 
+
 def color_a_semantic_image(a_semantic_array):
     output = np.zeros(shape=(a_semantic_array.shape[0], a_semantic_array.shape[1], 3), dtype=np.uint8)
     for key in config.NUTFUSER_SEMANTIC_COLOR:
-        output[a_semantic_array==key] = config.NUTFUSER_SEMANTIC_COLOR[key]
+        output[a_semantic_array == key] = config.NUTFUSER_SEMANTIC_COLOR[key]
     return output
 
+
 def create_semantic_comparison(predicted_semantic, label_semantic=None, concatenate_vertically=True):
-    predicted_semantic = process_array_and_tensor(predicted_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=True)
+    predicted_semantic = process_array_and_tensor(predicted_semantic, denormalize=False, data_dims=2, channels=1,
+                                                  dtype=np.uint8, argmax=True)
     if label_semantic is not None:
-        label_semantic = process_array_and_tensor(label_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
-        
+        label_semantic = process_array_and_tensor(label_semantic, denormalize=False, data_dims=2, channels=1,
+                                                  dtype=np.uint8, argmax=False)
+
         if concatenate_vertically:
-            semantic_comparison = np.zeros((predicted_semantic.shape[0]*2, predicted_semantic.shape[1], 3), dtype=np.uint8)
+            semantic_comparison = np.zeros((predicted_semantic.shape[0] * 2, predicted_semantic.shape[1], 3),
+                                           dtype=np.uint8)
             semantic_comparison[0:predicted_semantic.shape[0], :] = color_a_semantic_image(predicted_semantic)
             semantic_comparison[label_semantic.shape[0]:, :] = color_a_semantic_image(label_semantic)
         else:
-            semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1]*2, 3), dtype=np.uint8)
-            semantic_comparison[:, 0:predicted_semantic.shape[1]] = np.rot90(color_a_semantic_image(predicted_semantic), 1)
+            semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1] * 2, 3),
+                                           dtype=np.uint8)
+            semantic_comparison[:, 0:predicted_semantic.shape[1]] = np.rot90(color_a_semantic_image(predicted_semantic),
+                                                                             1)
             semantic_comparison[:, label_semantic.shape[1]:] = color_a_semantic_image(label_semantic)
     else:
         if concatenate_vertically:
-            semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1], 3), dtype=np.uint8)
+            semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1], 3),
+                                           dtype=np.uint8)
             semantic_comparison[:, :] = color_a_semantic_image(predicted_semantic)
         else:
-            semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1], 3), dtype=np.uint8)
+            semantic_comparison = np.zeros((predicted_semantic.shape[0], predicted_semantic.shape[1], 3),
+                                           dtype=np.uint8)
             semantic_comparison[:, :] = np.rot90(color_a_semantic_image(predicted_semantic), 1)
 
     return semantic_comparison
 
+
 def create_flow_comparison(predicted_flow, label_flow=None):
-    predicted_flow = ((predicted_flow + 1)*(2**15)).permute(0, 2, 3, 1)
-    predicted_flow = process_array_and_tensor(predicted_flow, denormalize=False, data_dims=2, channels=2, dtype=np.float32, argmax=False)
+    predicted_flow = ((predicted_flow + 1) * (2 ** 15)).permute(0, 2, 3, 1)
+    predicted_flow = process_array_and_tensor(predicted_flow, denormalize=False, data_dims=2, channels=2,
+                                              dtype=np.float32, argmax=False)
     if label_flow is not None:
         label_flow = label_flow[:, :, :, :2]
-        label_flow = process_array_and_tensor(label_flow, denormalize=False, data_dims=2, channels=2, dtype=np.float32, argmax=False)
+        label_flow = process_array_and_tensor(label_flow, denormalize=False, data_dims=2, channels=2, dtype=np.float32,
+                                              argmax=False)
 
-        flow_comparison = np.zeros((predicted_flow.shape[0]*2, predicted_flow.shape[1], 3), dtype=np.uint8)
+        flow_comparison = np.zeros((predicted_flow.shape[0] * 2, predicted_flow.shape[1], 3), dtype=np.uint8)
         flow_comparison[0:predicted_flow.shape[0], :, :] = optical_flow_to_human(predicted_flow)
         flow_comparison[predicted_flow.shape[0]:, :, :] = optical_flow_to_human(label_flow)
     else:
@@ -429,21 +470,29 @@ def create_flow_comparison(predicted_flow, label_flow=None):
 
     return flow_comparison
 
+
 def create_a_fake_rgb_comparison(rgb):
     return process_array_and_tensor(rgb, denormalize=False, data_dims=2, channels=3, dtype=np.uint8, argmax=False)
+
 
 def create_a_fake_lidar_comparison(lidar):
     return process_array_and_tensor(lidar, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
 
-def create_waypoints_comparison(prediction_target_speed, prediction_waypoints, actual_speed, target_point, label_bev_semantic=None, label_target_speed=None, label_waypoints=None, pred_bev_semantic=None):
+
+def create_waypoints_comparison(prediction_target_speed, prediction_waypoints, actual_speed, target_point,
+                                label_bev_semantic=None, label_target_speed=None, label_waypoints=None,
+                                pred_bev_semantic=None):
     if label_bev_semantic is not None:
-        background = process_array_and_tensor(label_bev_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=False)
+        background = process_array_and_tensor(label_bev_semantic, denormalize=False, data_dims=2, channels=1,
+                                              dtype=np.uint8, argmax=False)
     elif pred_bev_semantic is not None:
-        background = process_array_and_tensor(pred_bev_semantic, denormalize=False, data_dims=2, channels=1, dtype=np.uint8, argmax=True)
+        background = process_array_and_tensor(pred_bev_semantic, denormalize=False, data_dims=2, channels=1,
+                                              dtype=np.uint8, argmax=True)
         background = np.rot90(background, 1)
     else:
-        raise NutException(color_error_string("I receinved both 'label_bev_semantic' and 'pred_bev_semantic' as None! :-("))
-    
+        raise NutException(
+            color_error_string("I receinved both 'label_bev_semantic' and 'pred_bev_semantic' as None! :-("))
+
     background_rgb = np.zeros((background.shape[0], background.shape[1], 3), dtype=np.uint8)
     background_rgb[:, :, 0] = background * 30
     background_rgb[:, :, 1] = background * 30
@@ -451,19 +500,25 @@ def create_waypoints_comparison(prediction_target_speed, prediction_waypoints, a
     black_part_for_text = np.zeros((background.shape[0], background.shape[1], 3), dtype=np.uint8)
 
     if label_target_speed is not None:
-        label_target_speed = process_array_and_tensor(label_target_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False)
+        label_target_speed = process_array_and_tensor(label_target_speed, denormalize=False, data_dims=1, channels=1,
+                                                      dtype=np.float32, argmax=False)
     if label_waypoints is not None:
-        label_waypoints = process_array_and_tensor(label_waypoints, denormalize=False, data_dims=1, channels=label_waypoints.shape[-1], dtype=np.float32, argmax=False)
-        label_waypoints = label_waypoints[:, :2] # we drop the z
-    prediction_target_speed = process_array_and_tensor(prediction_target_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False, softmax=True)
-    prediction_waypoints = process_array_and_tensor(prediction_waypoints, denormalize=False, data_dims=1, channels=2, dtype=np.float32, argmax=False)
-    actual_speed = process_array_and_tensor(actual_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False)
-    target_point = process_array_and_tensor(target_point, denormalize=False, data_dims=1, channels=1, dtype=np.float32, argmax=False)
-    target_point = target_point[:2] # we drop the z
+        label_waypoints = process_array_and_tensor(label_waypoints, denormalize=False, data_dims=1,
+                                                   channels=label_waypoints.shape[-1], dtype=np.float32, argmax=False)
+        label_waypoints = label_waypoints[:, :2]  # we drop the z
+    prediction_target_speed = process_array_and_tensor(prediction_target_speed, denormalize=False, data_dims=1,
+                                                       channels=1, dtype=np.float32, argmax=False, softmax=True)
+    prediction_waypoints = process_array_and_tensor(prediction_waypoints, denormalize=False, data_dims=1, channels=2,
+                                                    dtype=np.float32, argmax=False)
+    actual_speed = process_array_and_tensor(actual_speed, denormalize=False, data_dims=1, channels=1, dtype=np.float32,
+                                            argmax=False)
+    target_point = process_array_and_tensor(target_point, denormalize=False, data_dims=1, channels=1, dtype=np.float32,
+                                            argmax=False)
+    target_point = target_point[:2]  # we drop the z
 
     # We draw the targetpoint
-    target_point_x = target_point[0]*256/config.BEV_SQUARE_SIDE_IN_M
-    target_point_y = target_point[1]*256/config.BEV_SQUARE_SIDE_IN_M
+    target_point_x = target_point[0] * 256 / config.BEV_SQUARE_SIDE_IN_M
+    target_point_y = target_point[1] * 256 / config.BEV_SQUARE_SIDE_IN_M
     if target_point_x > 128:
         target_point_x = 128
     elif target_point_x < -128:
@@ -472,25 +527,26 @@ def create_waypoints_comparison(prediction_target_speed, prediction_waypoints, a
         target_point_y = 128
     elif target_point_y < -128:
         target_point_y = -128
-    background_rgb = cv2.circle(background_rgb, (int(128-target_point_x), int(128-target_point_y)), 5, (0, 255, 255), -1)
-
+    background_rgb = cv2.circle(background_rgb, (int(128 - target_point_x), int(128 - target_point_y)), 5,
+                                (0, 255, 255), -1)
 
     # We draw the waypoints
     for i in range(prediction_waypoints.shape[0]):
         background_rgb = cv2.circle(background_rgb,
-                                        (   int(128-prediction_waypoints[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M),
-                                            int(128-prediction_waypoints[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)),
-                                        3, (0, 0, 255), -1)
+                                    (int(128 - prediction_waypoints[i, 0] * 256 / config.BEV_SQUARE_SIDE_IN_M),
+                                     int(128 - prediction_waypoints[i, 1] * 256 / config.BEV_SQUARE_SIDE_IN_M)),
+                                    3, (0, 0, 255), -1)
         if label_waypoints is not None:
-            background_rgb = cv2.circle(background_rgb, 
-                                            (   int(128-label_waypoints[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M),
-                                                int(128-label_waypoints[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)),
-                                            2, (0, 255, 0), -1)
-    
+            background_rgb = cv2.circle(background_rgb,
+                                        (int(128 - label_waypoints[i, 0] * 256 / config.BEV_SQUARE_SIDE_IN_M),
+                                         int(128 - label_waypoints[i, 1] * 256 / config.BEV_SQUARE_SIDE_IN_M)),
+                                        2, (0, 255, 0), -1)
+
     space_from_left = 10
     space_from_top = 30
     # We draw the actual speed
-    cv2.putText(black_part_for_text, f"{float(actual_speed*3.6):.2f} km/h", (space_from_left, space_from_top), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
+    cv2.putText(black_part_for_text, f"{float(actual_speed * 3.6):.2f} km/h", (space_from_left, space_from_top),
+                cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
 
     speeds = [0, 7, 18, 29]
     if label_target_speed is not None:
@@ -503,8 +559,11 @@ def create_waypoints_comparison(prediction_target_speed, prediction_waypoints, a
             if i != 3:
                 text_label_target_speed += ","
             text_label_target_speed += " "
-        cv2.putText(black_part_for_text, text_label_target_speed, (space_from_left, space_from_top*2), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(0, 255, 0), thickness=1, lineType=cv2.LINE_AA)
-        cv2.putText(black_part_for_text, f"{speeds[index_best_label_target_speed]:.2f} km/h", (space_from_left, space_from_top*3), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(0, 255, 0), thickness=1, lineType=cv2.LINE_AA)
+        cv2.putText(black_part_for_text, text_label_target_speed, (space_from_left, space_from_top * 2),
+                    cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.45, color=(0, 255, 0), thickness=1, lineType=cv2.LINE_AA)
+        cv2.putText(black_part_for_text, f"{speeds[index_best_label_target_speed]:.2f} km/h",
+                    (space_from_left, space_from_top * 3), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.45, color=(0, 255, 0),
+                    thickness=1, lineType=cv2.LINE_AA)
 
     # We draw the predicted target speed
     list_predicted_target_speed = [float(el) for el in prediction_target_speed]
@@ -515,14 +574,18 @@ def create_waypoints_comparison(prediction_target_speed, prediction_waypoints, a
         if i != 3:
             text_predicted_target_speed += ","
         text_predicted_target_speed += " "
-    cv2.putText(black_part_for_text, text_predicted_target_speed, (space_from_left, space_from_top*4), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(255, 0, 0), thickness=1, lineType=cv2.LINE_AA)
-    cv2.putText(black_part_for_text, f"{speeds[index_best_predicted_target_speed]:.2f} km/h", (space_from_left, space_from_top*5), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.45, color=(255, 0, 0), thickness=1, lineType=cv2.LINE_AA)
+    cv2.putText(black_part_for_text, text_predicted_target_speed, (space_from_left, space_from_top * 4),
+                cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.45, color=(255, 0, 0), thickness=1, lineType=cv2.LINE_AA)
+    cv2.putText(black_part_for_text, f"{speeds[index_best_predicted_target_speed]:.2f} km/h",
+                (space_from_left, space_from_top * 5), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.45, color=(255, 0, 0),
+                thickness=1, lineType=cv2.LINE_AA)
 
-    waypoints_comparison = np.zeros((background_rgb.shape[0], background_rgb.shape[1]*2, 3), dtype=np.uint8)
+    waypoints_comparison = np.zeros((background_rgb.shape[0], background_rgb.shape[1] * 2, 3), dtype=np.uint8)
     waypoints_comparison[:, 0:background_rgb.shape[1]] = background_rgb
-    waypoints_comparison[:, background_rgb.shape[1]:] =black_part_for_text
+    waypoints_comparison[:, background_rgb.shape[1]:] = black_part_for_text
 
     return waypoints_comparison
+
 
 def lidar_to_histogram_features(lidar):
     """
@@ -531,10 +594,11 @@ def lidar_to_histogram_features(lidar):
     :return: (2, H, W) numpy, LiDAR as sparse image
     """
     MAX_HIST_POINTS = 5
+
     def splat_points(point_cloud):
         # 256 x 256 grid
-        xbins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_IMAGE_W+1)
-        ybins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_SQUARE_SIDE_IN_M/2, config.BEV_IMAGE_H+1)
+        xbins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M / 2, config.BEV_SQUARE_SIDE_IN_M / 2, config.BEV_IMAGE_W + 1)
+        ybins = np.linspace(-config.BEV_SQUARE_SIDE_IN_M / 2, config.BEV_SQUARE_SIDE_IN_M / 2, config.BEV_IMAGE_H + 1)
         hist = np.histogramdd(point_cloud[:, :2], bins=(xbins, ybins))[0]
         hist[hist > MAX_HIST_POINTS] = MAX_HIST_POINTS
         overhead_splat = hist / MAX_HIST_POINTS
@@ -542,6 +606,7 @@ def lidar_to_histogram_features(lidar):
         # Comes from the fact that carla is x front, y right, whereas the image is y front, x right
         # (x height channel, y width channel)
         return overhead_splat.T
+
     # Remove points above the vehicle
     lidar = lidar[lidar[..., 2] < -2.5 + config.MAXIMUM_LIDAR_HEIGHT]
     lidar = lidar[lidar[..., 2] > -2.5 + config.MINIMUM_LIDAR_HEIGHT]
@@ -552,12 +617,13 @@ def lidar_to_histogram_features(lidar):
     features = features.astype(np.uint8)
     return features
 
+
 def load_model_given_weights(weights_path):
     try:
         weights = torch.load(weights_path)
     except Exception as e:
         raise NutException(color_error_string(f"Impossible to load weights located in '{weights_path}'!"))
-    
+
     a_config_file = GlobalConfig()
     predicting_flow = None
     just_a_backbone = None
@@ -595,7 +661,7 @@ def load_model_given_weights(weights_path):
         else:
             a_config_file.use_discrete_command = False
             tfpp_original = False
-    
+
     print(f"PREDICT FLOW:\t\t{predicting_flow}")
     print(f"JUST A BACKBONE:\t{just_a_backbone}")
     print(f"ORIGINAL TFPP:\t\t{tfpp_original}")
@@ -611,23 +677,25 @@ def load_model_given_weights(weights_path):
         model.load_state_dict(weights, strict=False)
     except Exception as e:
         raise NutException(color_error_string(f"Weight in '{weights_path}' not compatible with the model!"))
-    
+
     return model, predicting_flow, just_a_backbone, tfpp_original
 
+
 def indent(elem, level=0):
-    i = "\n" + level*"  "
+    i = "\n" + level * "  "
     if len(elem):
         if not elem.text or not elem.text.strip():
             elem.text = i + "  "
         if not elem.tail or not elem.tail.strip():
             elem.tail = i
         for elem in elem:
-            indent(elem, level+1)
+            indent(elem, level + 1)
         if not elem.tail or not elem.tail.strip():
             elem.tail = i
     else:
         if level and (not elem.tail or not elem.tail.strip()):
             elem.tail = i
+
 
 def unify_routes_xml(xmls_folder_path):
     routes = ET.Element("routes")
@@ -635,7 +703,7 @@ def unify_routes_xml(xmls_folder_path):
     xml_files = os.listdir(xmls_folder_path)
     if "evaluation.xml" in xml_files:
         xml_files.remove("evaluation.xml")
-    
+
     for file in xml_files:
         single_route_tree = ET.parse(os.path.join(xmls_folder_path, file))
         single_route = single_route_tree.getroot().getchildren()[0]
@@ -652,5 +720,303 @@ def get_configs_as_dict():
     return vars_name
 
 
+def create_ground_truth(input_size, num_classes, boxes, labels, yaws, downsample_ratio=4, yaw_classes=12):
+    """
+    Creates ground truth heatmaps, size maps, offset maps, and yaw maps for CenterNet training.
+
+    Parameters:
+    - input_size: (width, height) of the input image
+    - num_classes: number of object classes
+    - boxes: list of bounding boxes, each box is [x_min, y_min, x_max, y_max]
+    - labels: list of labels corresponding to each bounding box
+    - yaws: list of yaw angles (in radians) corresponding to each bounding box
+    - downsample_ratio: the ratio by which the output feature map is downsampled
+
+    Returns:
+    - heatmap: the ground truth heatmap
+    - size_map: the ground truth size map
+    - offset_map: the ground truth offset map
+    - yaw_map: the ground truth yaw map
+    """
+    output_size = (input_size[0] // downsample_ratio, input_size[1] // downsample_ratio)
+
+    heatmap = np.zeros((num_classes, output_size[1], output_size[0]), dtype=np.float32)
+    size_map = np.zeros((2, output_size[1], output_size[0]), dtype=np.float32)
+    offset_map = np.zeros((2, output_size[1], output_size[0]), dtype=np.float32)
+    yaw_class_map = np.zeros((output_size[1], output_size[0]), dtype=np.int)
+    yaw_res_map = np.zeros((output_size[1], output_size[0]), dtype=np.float32)
+    pixel_weight = np.zeros((2, output_size[1], output_size[0]), dtype=np.int)
+    num_ob_bbs = len(boxes)
+
+    def gaussian_radius(det_size, min_overlap=0.7):
+        height, width = det_size
+        a1 = 1
+        b1 = (height + width)
+        c1 = width * height * (1 - min_overlap) / (1 + min_overlap)
+        sq1 = np.sqrt(b1 ** 2 - 4 * a1 * c1)
+        r1 = (b1 + sq1) / 2
+
+        a2 = 4
+        b2 = 2 * (height + width)
+        c2 = (1 - min_overlap) * width * height
+        sq2 = np.sqrt(b2 ** 2 - 4 * a2 * c2)
+        r2 = (b2 + sq2) / 2
+
+        a3 = 4 * min_overlap
+        b3 = 2 * min_overlap * (height + width)
+        c3 = (min_overlap - 1) * width * height
+        sq3 = np.sqrt(b3 ** 2 - 4 * a3 * c3)
+        r3 = (b3 + sq3) / 2
+        return min(r1, r2, r3)
+
+    def draw_gaussian(heatmap, center, radius, k=1):
+        diameter = 2 * radius + 1
+        gaussian = np.exp(- ((np.arange(diameter) - radius) ** 2) / (2 * (radius / 3) ** 2))
+        gaussian = np.outer(gaussian, gaussian)
+        x, y = int(center[0]), int(center[1])
+        height, width = heatmap.shape[0:2]
+
+        left, right = min(x, radius), min(width - x, radius + 1)
+        top, bottom = min(y, radius), min(height - y, radius + 1)
+
+        masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
+        masked_gaussian = gaussian[radius - top:radius + bottom, radius - left:radius + right]
+        if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
+            np.maximum(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
+
+    def angle2class(angle, yaw_classes=yaw_classes):
+        """
+        Convert continuous angle to a discrete class and a small regression number from class center angle to current angle.
+        Args:
+            angle (float): Angle is from 0-2pi (or -pi~pi),
+              class center at 0, 1*(2pi/N), 2*(2pi/N) ...  (N-1)*(2pi/N).
+            yaw_classes: number of classes to devide the full angle
+        Returns:
+            tuple: Encoded discrete class and residual.
+        """
+        angle = angle % (2 * np.pi)
+        angle_per_class = 2 * np.pi / float(yaw_classes)
+        shifted_angle = (angle + angle_per_class / 2) % (2 * np.pi)
+        angle_cls = shifted_angle // angle_per_class
+        angle_res = shifted_angle - (angle_cls * angle_per_class + angle_per_class / 2)
+        return int(angle_cls), angle_res
+
+    for box, label, yaw in zip(boxes, labels, yaws):
+        center_x, center_y, width, height = box
+        cls_id = label
+
+        if width > 0 and height > 0:
+            center_x_s, center_y_s = center_x / downsample_ratio, center_y / downsample_ratio
+            center = (center_x_s, center_y_s)
+            radius = gaussian_radius((height / downsample_ratio, width / downsample_ratio))
+            radius = max(0, int(radius))
+
+            draw_gaussian(heatmap[cls_id], center, radius)
+
+            size_map[:, int(center_y_s), int(center_x_s)] = [width, height]
+            offset_map[:, int(center_y_s), int(center_x_s)] = [center_x_s - int(center_x_s),
+                                                               center_y_s - int(center_y_s)]
+
+            yaw_class_map[int(center_y_s), int(center_x_s)], yaw_res_map[int(center_y_s), int(center_x_s)] =\
+                angle2class(yaw)
+
+            pixel_weight[:, int(center_y_s), int(center_x_s)] = 1
+
+    return heatmap, size_map, offset_map, yaw_class_map, yaw_res_map, pixel_weight, num_ob_bbs
+
+
+def decode_predictions(heatmap, size_map, offset_map, yaw_class_map, yaw_res_map, score_threshold=0.1,
+                       downsample_ratio=4, yaw_classes=12):
+    """
+    Decodes the heatmaps, size maps, offset maps, and yaw maps back to bounding boxes, class labels, and yaw angles.
+
+    Parameters:
+    - heatmap: the predicted heatmap
+    - size_map: the predicted size map
+    - offset_map: the predicted offset map
+    - yaw_map: the predicted yaw map
+    - score_threshold: threshold for heatmap scores to consider a detection
+    - downsample_ratio: the ratio by which the output feature map is downsampled
+
+    Returns:
+    - boxes: list of bounding boxes [x_min, y_min, x_max, y_max]
+    - labels: list of class labels corresponding to each bounding box
+    - yaws: list of yaw angles corresponding to each bounding box
+    - score: list of the scores for each bounding boxes
+    """
+    def class2angle(angle_cls, angle_res, limit_period=True):
+        """
+        Inverse function to angle2class.
+        Args:
+            angle_cls (torch.Tensor): Angle class to decode.
+            angle_res (torch.Tensor): Angle residual to decode.
+            limit_period (bool): Whether to limit angle to [-pi, pi].
+        Returns:
+            torch.Tensor: Angle decoded from angle_cls and angle_res.
+        """
+        angle_per_class = 2 * np.pi / float(yaw_classes)
+        angle_center = float(angle_cls) * angle_per_class
+        angle = angle_center + angle_res
+        if limit_period:
+            if angle > np.pi:
+                angle -= 2 * np.pi
+        return angle
+
+    boxes = []
+    labels = []
+    yaws = []
+    scores = []
+
+    heatmap = np.maximum(heatmap, 0)
+    heatmap = np.minimum(heatmap, 1)
+
+    for cls_id in range(heatmap.shape[0]):
+        cls_heatmap = heatmap[cls_id]
+        y_indices, x_indices = np.where(cls_heatmap >= score_threshold)
+
+        for y, x in zip(y_indices, x_indices):
+            score = cls_heatmap[y, x]
+
+            width, height = size_map[:, y, x]
+            offset_x, offset_y = offset_map[:, y, x]
+            yaw = class2angle(yaw_class_map[y, x], yaw_res_map[y, x])
+
+            center_x = (x + offset_x) * downsample_ratio
+            center_y = (y + offset_y) * downsample_ratio
+
+            boxes.append([center_x, center_y, width, height])
+            labels.append(cls_id)
+            yaws.append(yaw)
+            scores.append(score)
+
+    return np.array(boxes), np.array(labels), np.array(yaws), np.array(scores)
+
+
+def draw_bounding_boxes(image, boxes,  labels, yaws, thickness=2):
+    """
+    Draws bounding boxes on an image.
+
+    Parameters:
+    - image: the input image
+    - boxes: list of bounding boxes, each box is (center_x, center_y, width, height, yaw)
+    - color: the color of the bounding box (default is green)
+    - thickness: the thickness of the bounding box lines (default is 2)
+
+    Returns:
+    - image: the image with bounding boxes drawn
+    """
+    colors = [
+        (255, 0, 0),
+        (0, 255, 0)
+    ]
+    assert len(boxes) == len(labels) == len(yaws)
+    for i in range(len(boxes)):
+        center_x, center_y, width, height = boxes[i]
+        if width < 2 or height < 2:
+            continue
+        yaw = yaws[i]
+        label = labels[i]
+        color = colors[label]
+        center = (int(center_x), int(center_y))
+
+        # Calculate corner points of the bounding box
+        cos_yaw = np.cos(yaw)
+        sin_yaw = np.sin(yaw)
+
+        half_width = width / 2
+        half_height = height / 2
+
+        points = np.array([
+            [-half_width, -half_height],
+            [half_width, -half_height],
+            [half_width, half_height],
+            [-half_width, half_height]
+        ])
+
+        rotation_matrix = np.array([
+            [cos_yaw, -sin_yaw],
+            [sin_yaw, cos_yaw]
+        ])
+
+        rotated_points = np.dot(points, rotation_matrix)
+        translated_points = rotated_points + np.array(center)
+
+        pts = translated_points.astype(np.int32)
+        pts = pts.reshape((-1, 1, 2))
+
+        # Draw the bounding box
+        cv2.polylines(image, [pts], isClosed=True, color=color, thickness=thickness)
+
+    return image
+
+
 if __name__ == "__main__":
-    pass
+    import neural_networks.tfpp.config as tf_config
+
+    a_config = tf_config.GlobalConfig()
+    """
+    bboxes = [
+        {"class": "car", "extent": [100.0, 100.0, 100.0], "position": [1.0, 1.0, 1.0], "yaw": 1.0},
+        {"class": "car", "extent": [200.0, 200.0, 200.0], "position": [2.0, 2.0, 2.0], "yaw": 2.0},
+        {"class": "car", "extent": [300.0, 300.0, 300.0], "position": [3.0, 3.0, 3.0], "yaw": 3.0},
+        {"class": "walker", "extent": [1.0, 1.0, 1.0], "position": [0.0, 0.0, 0.0], "yaw": 0.0},
+        {"class": "walker", "extent": [1.0, 1.0, 1.0], "position": [0.0, 0.0, 0.0], "yaw": 0.0}
+    ]
+    data = parse_bounding_boxes(bboxes, a_config)
+
+    for key in data:
+        data[key] = torch.tensor(data[key])
+        if data[key].dim() > 0:
+            data[key] = data[key][None, :]
+        else:
+            data[key] = data[key][None]
+        print(f"{key} = {data[key].shape}")
+
+    from neural_networks.tfpp.center_net import LidarCenterNetHead
+
+    head = LidarCenterNetHead(a_config)
+    batch_bboxes = head.decode_heatmap(center_heatmap_pred=data["center_heatmap"],
+                                       wh_pred=data["wh"],
+                                       offset_pred=data["offset"],
+                                       yaw_class_pred=data["yaw_class"],
+                                       yaw_res_pred=data["yaw_res"],
+                                       velocity_pred=data["velocity"],
+                                       brake_pred=data["brake_target"])
+    print(batch_bboxes)
+    """
+    # Example usage:
+    input_size = (512, 512)
+    num_classes = 2
+    boxes = [[100, 100, 50, 50], [200, 200, 50, 50], [300, 300, 50, 50]]  # Example bounding boxes
+    labels = [0, 0, 1]  # Example class labels
+    yaws = [0.5, 0.0, -0.5]  # Example yaw angles in radians
+
+    heatmap, size_map, offset_map, yaw_class_map, yaw_res_map, pixel_weight, num_ob_bbs =\
+        create_ground_truth(input_size, num_classes, boxes, labels, yaws, downsample_ratio=4)
+
+    # Example usage:
+    # Assuming heatmap, size_map, offset_map, yaw_map are the predicted maps from the model
+    # heatmap, size_map, offset_map, yaw_map = model_output
+
+    boxes, labels, yaws, scores =\
+        decode_predictions(heatmap, size_map, offset_map, yaw_class_map, yaw_res_map, score_threshold=0.9,
+                           downsample_ratio=4, yaw_classes=12)
+
+    image = np.zeros((512, 512, 3))
+    image = draw_bounding_boxes(image, boxes, labels, yaws)
+
+    import matplotlib.pyplot as plt
+    imgplot = plt.imshow(pixel_weight[0])
+    plt.show()
+    imgplot = plt.imshow(heatmap[1])
+    plt.show()
+    cv2.imshow("bbs", image)
+
+    cv2.waitKey(0)
+
+    cv2.destroyAllWindows()
+
+
+
+
+

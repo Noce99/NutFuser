@@ -770,7 +770,7 @@ class CARLA_Data(Dataset):  # pylint: disable=locally-disabled, invalid-name
             wh_target[0, cty_int, ctx_int] = extent_x
             wh_target[1, cty_int, ctx_int] = extent_y
 
-            yaw_class, yaw_res = angle2class(gt_bboxes[j, 4], self.config.num_dir_bins)
+            yaw_class, yaw_res = angle2class(gt_bboxes[j, 4])
 
             yaw_class_target[0, cty_int, ctx_int] = yaw_class
             yaw_res_target[0, cty_int, ctx_int] = yaw_res

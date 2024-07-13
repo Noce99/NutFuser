@@ -432,7 +432,7 @@ class LidarCenterNet(nn.Module):
 
         pred_bounding_box = None
         if self.config.detect_boxes:
-            pred_bounding_box = self.head(bev_feature_grid)  # tuple of 7 elements
+            pred_bounding_box = self.head(bev_feature_grid)  # tuple of 5 elements
 
         # SHOWING IMAGES
         """
@@ -615,10 +615,10 @@ class LidarCenterNet(nn.Module):
             loss.update({'loss_flow': loss_flow})
 
         if self.config.detect_boxes:
-            loss_bbox = self.head.loss(pred_bounding_box[0], pred_bounding_box[1], pred_bounding_box[2], pred_bounding_box[3],
-                                       pred_bounding_box[4], pred_bounding_box[5], pred_bounding_box[6], center_heatmap_label,
-                                       wh_label, yaw_class_label, yaw_res_label, offset_label, velocity_label,
-                                       brake_target_label, pixel_weight_label, avg_factor_label)
+            loss_bbox = self.head.loss(pred_bounding_box[0], pred_bounding_box[1], pred_bounding_box[2],
+                                       pred_bounding_box[3], pred_bounding_box[4],
+                                       center_heatmap_label, wh_label, yaw_class_label, yaw_res_label, offset_label,
+                                       pixel_weight_label, avg_factor_label)
 
             loss.update(loss_bbox)
 

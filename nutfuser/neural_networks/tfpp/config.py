@@ -312,7 +312,7 @@ class GlobalConfig:
         self.center_net_max_pooling_kernel = 3
         self.bb_input_channel = 64
         self.bb_feature_channel = 64
-        self.num_bb_classes = 4
+        self.num_bb_classes = 3
 
         # -----------------------------------------------------------------------------
         # TransFuser Model
