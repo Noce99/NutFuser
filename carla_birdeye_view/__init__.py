@@ -1,3 +1,5 @@
+import math
+
 import carla
 import logging
 import numpy as np
@@ -286,7 +288,47 @@ class BirdViewProducer:
             agent_vehicle, masks
         )
         ordered_indices = [mask.value for mask in BirdViewMasks.bottom_to_top()]
-        return cropped_masks[:, :, ordered_indices]
+
+        # Let's create the Bounding Boxes around Cars and Walkers
+        actor_sum = []
+
+        for el in segregated_actors.vehicles:
+            actor_sum.append((el, 1))
+        for el in segregated_actors.pedestrians:
+            actor_sum.append((el, 0))
+        bbs = []
+
+        center = agent_vehicle.get_transform().transform(carla.Location(x=0, y=0))
+        rotation_test = agent_vehicle.get_transform().transform(carla.Location(x=1, y=0))
+        yaw_agent = - math.atan2(rotation_test.x - center.x, rotation_test.y - center.y) + math.pi / 2
+
+        for actor, label in actor_sum:
+            center = actor.get_transform().transform(carla.Location(x=0, y=0))
+            rotation_test = actor.get_transform().transform(carla.Location(x=1, y=0))
+            yaw = - math.atan2(rotation_test.x - center.x, rotation_test.y - center.y) + math.pi / 2 - yaw_agent
+
+            if (math.sqrt(
+                    (center.x - agent_vehicle_loc.x)**2 +
+                    (center.y - agent_vehicle_loc.y)**2) * self.pixels_per_meter >
+                    self.target_size.width * math.sqrt(2)):
+                continue
+            width = actor.bounding_box.extent.x * 2
+            if width < 1.5:
+                width = 1.5
+            height = actor.bounding_box.extent.y * 2
+            if height < 1.5:
+                height = 1.5
+
+            # FROM m to px
+            center_x = (center.x - agent_vehicle_loc.x) * self.pixels_per_meter + self.target_size.width / 2
+            center_y = (center.y - agent_vehicle_loc.y) * self.pixels_per_meter + self.target_size.height / 2
+            center_x_inverted = self.target_size.height - center_x
+            width *= self.pixels_per_meter
+            height *= self.pixels_per_meter
+
+            bbs.append([int(center_x_inverted), int(center_y), width, height, yaw, label])
+
+        return cropped_masks[:, :, ordered_indices], bbs
 
     @staticmethod
     def as_rgb(birdview: BirdView) -> RgbCanvas:

@@ -235,10 +235,11 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     def bev_semantic_callback_2(my_world_snapshot):
         if not DISABLE_ALL_SENSORS and (
                 my_world_snapshot.frame - STARTING_FRAME) % config.AMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE == 0:
-            birdview: BirdView = birdview_producer.produce(agent_vehicle=hero)
+            birdview, bbs = birdview_producer.produce(agent_vehicle=hero)
             index_image = BirdViewProducer.as_carla_semantic(birdview)
             saved_frame = (my_world_snapshot.frame - STARTING_FRAME) // config.AMOUNT_OF_CARLA_FRAME_AFTER_WE_SAVE
             cv2.imwrite(os.path.join(PATHS["bev_semantic_2"], f"{saved_frame}.png"), index_image)
+            utils.save_bbs_in_json(os.path.join(PATHS["bounding_boxes"], f"{saved_frame}.json"), bbs)
             ALREADY_OBTAINED_DATA_FROM_SENSOR_B["bev_semantic_2"] = True
 
     # LIDAR
@@ -375,6 +376,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
         PATHS["rgb_tfpp"] = os.path.join(where_to_save, "rgb_tfpp")
         PATHS["lidar_tfpp"] = os.path.join(where_to_save, "lidar_tfpp")
     PATHS["bev_semantic_2"] = os.path.join(where_to_save, "bev_semantic_2")
+    PATHS["bounding_boxes"] = os.path.join(where_to_save, "bounding_boxes")
 
     for key_path in PATHS:
         os.mkdir(PATHS[key_path])

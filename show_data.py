@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 import argparse
 import math
+import json
 
 from nutfuser import config
 from nutfuser import utils
@@ -64,7 +65,7 @@ def show_frame_num_and_speeds(screen, dataset_path):
 
 
 titles_dict = {0: "RGB_A", 1: "RGB_B", 2: "DEPTH", 3: "SEMANTIC", 4: "OPTICAL_FLOW", 5: "BEV", 6: "ALL GPS",
-               7: "BEV Semantic 2", 8: "TESTS"}
+               7: "BEV Semantic 2 + BBS", 8: "TESTS"}
 folders_dict = {0: "rgb_A", 1: "rgb_B", 2: "depth", 3: "semantic", 4: "optical_flow"}
 
 
@@ -171,7 +172,9 @@ def print_section(screen, number, dataset_path):
             H_to_sum = (window_H - window_W) / 2
             W_to_sum = 0
         for point in all_gps_positions:
-            pygame.draw.circle(screen, (255, 0, 0), (point[0]*window_size+border+W_to_sum, point[1]*window_size+border+H_to_sum), 1)
+            pygame.draw.circle(screen, (255, 0, 0),
+                               (point[0]*window_size+border+W_to_sum, point[1]*window_size+border+H_to_sum),
+                               1)
         for i, point in enumerate(frame_gps_positions):
             if i == (FRAME-1):
                 radius = 5
@@ -210,6 +213,28 @@ def print_section(screen, number, dataset_path):
             y = SIDE_SPACE_SIZE + config.BEV_IMAGE_H
             rect.center = x, y
             screen.blit(img, rect)
+        if os.path.isdir(os.path.join(dataset_path, "bounding_boxes")):
+            folder_path = os.path.join(dataset_path, "bounding_boxes")
+            frame_path = os.path.join(folder_path, f"{FRAME}.json")
+            with open(frame_path) as json_data:
+                bbs = json.loads(json_data.read())
+            for bb in bbs:
+                bb[0] *= 2
+                bb[1] *= 2
+                bb[2] *= 2
+                bb[3] *= 2
+            my_rgb_array = np.zeros((config.BEV_IMAGE_H * 2, config.BEV_IMAGE_W * 2, 3), dtype=np.uint8)
+            my_rgb_array = utils.draw_bounding_boxes(my_rgb_array, bbs)
+            img = pygame.surfarray.make_surface(my_rgb_array)
+            img.convert()
+            rect = img.get_rect()
+            x = config.BEV_IMAGE_W
+            y = SIDE_SPACE_SIZE + config.BEV_IMAGE_H
+            rect.center = x, y
+            screen.blit(img, rect)
+
+
+
     elif number == 8:
         pass
     pygame.display.update()

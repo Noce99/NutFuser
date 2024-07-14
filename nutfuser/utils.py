@@ -3,6 +3,9 @@ import numpy as np
 import math
 import cv2
 import torch
+
+import json
+
 import xml.etree.ElementTree as ET
 
 from tqdm import tqdm
@@ -892,7 +895,7 @@ def decode_predictions(heatmap, size_map, offset_map, yaw_class_map, yaw_res_map
     return np.array(boxes), np.array(labels), np.array(yaws), np.array(scores)
 
 
-def draw_bounding_boxes(image, boxes,  labels, yaws, thickness=2):
+def draw_bounding_boxes(image, boxes,  labels=None, yaws=None, thickness=2):
     """
     Draws bounding boxes on an image.
 
@@ -909,15 +912,41 @@ def draw_bounding_boxes(image, boxes,  labels, yaws, thickness=2):
         (255, 0, 0),
         (0, 255, 0)
     ]
-    assert len(boxes) == len(labels) == len(yaws)
+    if len(boxes) == 0:
+        return image
+    if yaws is not None:
+        assert len(boxes) == len(yaws)
+        assert len(boxes[0]) < 6
+    else:
+        assert len(boxes[0]) > 4
+    if labels is not None:
+        assert len(boxes) == len(labels)
+        assert len(boxes[0]) < 6
+    else:
+        assert len(boxes[0]) > 4
+    if labels is not None and yaws is not None:
+        assert len(boxes[0]) == 4
+    if labels is None and yaws is None:
+        assert len(boxes[0]) == 6
     for i in range(len(boxes)):
-        center_x, center_y, width, height = boxes[i]
+        center_x = boxes[i][0]
+        center_y = boxes[i][1]
+        width = boxes[i][2]
+        height = boxes[i][3]
         if width < 2 or height < 2:
             continue
-        yaw = yaws[i]
-        label = labels[i]
+        if yaws is not None:
+            yaw = yaws[i]
+        else:
+            yaw = boxes[i][4]
+        if labels is not None:
+            label = labels[i]
+        else:
+            label = boxes[i][5]
         color = colors[label]
         center = (int(center_x), int(center_y))
+
+        print(f"{(int(center_x), int(center_y))}, {(width, height)}, yaw={yaw}, label={label}")
 
         # Calculate corner points of the bounding box
         cos_yaw = np.cos(yaw)
@@ -948,6 +977,11 @@ def draw_bounding_boxes(image, boxes,  labels, yaws, thickness=2):
         cv2.polylines(image, [pts], isClosed=True, color=color, thickness=thickness)
 
     return image
+
+
+def save_bbs_in_json(path, bbs):
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(bbs, f, ensure_ascii=False, indent=4)
 
 
 if __name__ == "__main__":
