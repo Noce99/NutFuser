@@ -320,8 +320,13 @@ class BirdViewProducer:
                 height = 1.5
 
             # FROM m to px
-            center_x = (center.x - agent_vehicle_loc.x) * self.pixels_per_meter + self.target_size.width / 2
-            center_y = (center.y - agent_vehicle_loc.y) * self.pixels_per_meter + self.target_size.height / 2
+            center_x = center.x - agent_vehicle_loc.x
+            center_y = center.y - agent_vehicle_loc.y
+            tmp_center_x = center_x
+            center_x = center_x * math.cos(-yaw_agent) - center_y * math.sin(-yaw_agent)
+            center_y = tmp_center_x * math.sin(-yaw_agent) + center_y * math.cos(-yaw_agent)
+            center_x = center_x * self.pixels_per_meter + self.target_size.width / 2
+            center_y = center_y * self.pixels_per_meter + self.target_size.height / 2
             center_x_inverted = self.target_size.height - center_x
             width *= self.pixels_per_meter
             height *= self.pixels_per_meter
