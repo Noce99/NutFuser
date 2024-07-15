@@ -1,8 +1,7 @@
-import sys
 import os
-import stat
 import shutil
 import collections
+import random
 
 from nutfuser import config
 from nutfuser import utils
@@ -83,6 +82,7 @@ if __name__ == "__main__":
     while not done:
         try:
             num_of_npc = int(input("How many npc? (both cars and pedestrian) [int number] : "))
+            num_of_npc = int(num_of_npc-random.uniform(-1, 1)*(num_of_npc*0.5))  # given number +- 50 % of it
             done = True
         except KeyboardInterrupt:
             print(utils.color_info_string("Bye!"))
