@@ -82,7 +82,6 @@ if __name__ == "__main__":
     while not done:
         try:
             num_of_npc = int(input("How many npc? (both cars and pedestrian) [int number] : "))
-            num_of_npc = int(num_of_npc-random.uniform(-1, 1)*(num_of_npc*0.5))  # given number +- 50 % of it
             done = True
         except KeyboardInterrupt:
             print(utils.color_info_string("Bye!"))
@@ -119,6 +118,8 @@ if __name__ == "__main__":
     os.mkdir(os.path.join(script_and_jobs_path, "jobs"))
     os.mkdir(os.path.join(script_and_jobs_path, "logs"))
     for job in JOBS:
+        personal_num_of_npc = int(num_of_npc - random.uniform(-1, 1) * (num_of_npc * 0.5))  # given number +- 50 % of it
+
         with open(os.path.join(script_and_jobs_path, "jobs", f"job_{job.id}.sh"), "w") as file:
             file.write(
 f"""#!/bin/sh
@@ -146,7 +147,7 @@ echo "Job on Town $TOWN started: $dt"
 
 cd {NUTFUSER}
 source bin/activate
-python generate_data.py --carla_path {CARLA_PATH} --town $TOWN --rpc_port $PORT --tm_port $TM_PORT --job_id $JOB_ID --dataset_path {where_to_save_data} --num_of_frames {num_of_frames} --num_of_vehicle {num_of_npc} --num_of_walkers {num_of_npc}
+python generate_data.py --carla_path {CARLA_PATH} --town $TOWN --rpc_port $PORT --tm_port $TM_PORT --job_id $JOB_ID --dataset_path {where_to_save_data} --num_of_frames {num_of_frames} --num_of_vehicle {personal_num_of_npc} --num_of_walkers {num_of_npc}
 """         )
 
     with open(os.path.join(script_and_jobs_path, "launch_all_jobs.sh"), "w") as file:
