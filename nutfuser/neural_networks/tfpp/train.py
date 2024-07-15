@@ -26,7 +26,9 @@ import cv2
 
 from config import GlobalConfig
 from model import LidarCenterNet
-sys.path.append(str(pathlib.Path(__file__).parent.resolve().parent.resolve().parent.resolve().parent.resolve())) # NutFuser Folder ex: /home/enrico/Projects/Carla/NutFuser
+
+sys.path.append(str(pathlib.Path(
+    __file__).parent.resolve().parent.resolve().parent.resolve().parent.resolve()))  # NutFuser Folder ex: /home/enrico/Projects/Carla/NutFuser
 from nut_data import backbone_dataset
 import nutfuser.utils as utils
 import nutfuser.config as nutfuser_config
@@ -43,6 +45,7 @@ from collections import defaultdict
 # On some systems it is necessary to increase the limit on open file descriptors.
 try:
     import resource
+
     rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 except (ModuleNotFoundError, ImportError) as e:
@@ -64,35 +67,35 @@ def main():
                         type=int,
                         default=config.batch_size,
                         help='Batch size for one GPU. When training with multiple GPUs the effective'
-                        ' batch size will be batch_size*num_gpus')
+                             ' batch size will be batch_size*num_gpus')
     parser.add_argument('--logdir', type=str, required=True, help='Directory to log data and models to.')
     parser.add_argument('--load_file',
                         type=str,
                         default=config.load_file,
                         help='Model to load for initialization.'
-                        'Expects the full path with ending /path/to/model.pth '
-                        'Optimizer files are expected to exist in the same directory')
+                             'Expects the full path with ending /path/to/model.pth '
+                             'Optimizer files are expected to exist in the same directory')
     parser.add_argument('--setting',
                         type=str,
                         default=config.setting,
                         help='What training setting to use. Options: '
-                        'all: Train on all towns no validation data. '
-                        '01_03_withheld: Do not train on Town 01 and Town 03. '
-                        '02_05_withheld: Do not train on Town 02 and Town 05. '
-                        '04_06_withheld: Do not train on Town 04 and Town 06. '
-                        'Withheld data is used for validation')
+                             'all: Train on all towns no validation data. '
+                             '01_03_withheld: Do not train on Town 01 and Town 03. '
+                             '02_05_withheld: Do not train on Town 02 and Town 05. '
+                             '04_06_withheld: Do not train on Town 04 and Town 06. '
+                             'Withheld data is used for validation')
     parser.add_argument('--root_dir', type=str, required=True, help='Root directory of your training data')
     parser.add_argument('--val_dir', type=str, required=True, help='Root directory of your validation data')
     parser.add_argument('--schedule_reduce_epoch_01',
                         type=int,
                         default=config.schedule_reduce_epoch_01,
                         help='Epoch at which to reduce the lr by a factor of 10 the first '
-                        'time. Only used with --schedule 1')
+                             'time. Only used with --schedule 1')
     parser.add_argument('--schedule_reduce_epoch_02',
                         type=int,
                         default=config.schedule_reduce_epoch_02,
                         help='Epoch at which to reduce the lr by a factor of 10 the second '
-                        'time. Only used with --schedule 1')
+                             'time. Only used with --schedule 1')
     parser.add_argument('--backbone',
                         type=str,
                         default=config.backbone,
@@ -101,12 +104,12 @@ def main():
                         type=str,
                         default=config.image_architecture,
                         help='Which architecture to use for the image branch. resnet34, regnety_032 etc.'
-                        'All options of the TIMM lib can be used but some might need adjustments to the backbone.')
+                             'All options of the TIMM lib can be used but some might need adjustments to the backbone.')
     parser.add_argument('--lidar_architecture',
                         type=str,
                         default=config.lidar_architecture,
                         help='Which architecture to use for the lidar branch. Tested: resnet34, regnety_032.'
-                        'Has the special video option video_resnet18 and video_swin_tiny.')
+                             'Has the special video option video_resnet18 and video_swin_tiny.')
     parser.add_argument('--use_velocity',
                         type=int,
                         default=config.use_velocity,
@@ -128,8 +131,8 @@ def main():
                         type=int,
                         default=config.use_disk_cache,
                         help='0: Do not cache the dataset 1: Cache the dataset on the disk pointed to by the SCRATCH '
-                        'environment variable. Useful if the dataset is stored on shared slow filesystem and can be '
-                        'temporarily stored on faster SSD storage on the compute node.')
+                             'environment variable. Useful if the dataset is stored on shared slow filesystem and can be '
+                             'temporarily stored on faster SSD storage on the compute node.')
     parser.add_argument('--lidar_seq_len',
                         type=int,
                         default=config.lidar_seq_len,
@@ -183,13 +186,13 @@ def main():
                         type=int,
                         default=int(config.train_sampling_rate),
                         help='Rate at which the dataset is sub-sampled during training.'
-                        'Should be an odd number ideally ending with 1 or 5, because of the LiDAR sweeps alternating '
-                        'every frame')
+                             'Should be an odd number ideally ending with 1 or 5, because of the LiDAR sweeps alternating '
+                             'every frame')
     parser.add_argument('--use_amp',
                         type=int,
                         default=int(config.use_amp),
                         help='Currently amp produces inf gradients. DO NOT USE!.'
-                        'Whether to use automatic mixed precision with fp16 during training.')
+                             'Whether to use automatic mixed precision with fp16 during training.')
     parser.add_argument('--use_grad_clip',
                         type=int,
                         default=int(config.use_grad_clip),
@@ -218,7 +221,7 @@ def main():
                         type=int,
                         default=int(config.estimate_semantic_distribution),
                         help='Whether to estimate the weights to rebalance the semantic segmentation loss by class.'
-                        'This is extremely slow.')
+                             'This is extremely slow.')
     parser.add_argument('--use_discrete_command',
                         type=int,
                         default=int(config.use_discrete_command),
@@ -239,7 +242,7 @@ def main():
                         type=int,
                         default=int(config.freeze_backbone),
                         help='Freezes the encoder and auxiliary heads. Should be used when loading a already trained '
-                        'model. Can be used for fine-tuning or multi-stage training.')
+                             'model. Can be used for fine-tuning or multi-stage training.')
     parser.add_argument('--learn_multi_task_weights',
                         type=int,
                         default=int(config.learn_multi_task_weights),
@@ -260,18 +263,18 @@ def main():
                         type=int,
                         default=int(config.gru_input_size),
                         help='Number of channels in the InterFuser GRU input and Transformer decoder.'
-                        'Must be divisible by number of heads (8)')
+                             'Must be divisible by number of heads (8)')
     parser.add_argument('--num_repetitions',
                         type=int,
                         default=int(config.num_repetitions),
                         help='Our dataset consists of x repetitions of the same routes. '
-                        'This specifies how many repetitions we will train with. Max 3, Min 1.')
+                             'This specifies how many repetitions we will train with. Max 3, Min 1.')
     parser.add_argument('--bev_grid_height_downsample_factor',
                         type=int,
                         default=int(config.bev_grid_height_downsample_factor),
                         help='Ratio by which the height size of the voxel grid in BEV decoder are larger than width '
-                        'and depth. Value should be >= 1. Larger values uses less gpu memory. '
-                        'Only relevant for the bev_encoder backbone.')
+                             'and depth. Value should be >= 1. Larger values uses less gpu memory. '
+                             'Only relevant for the bev_encoder backbone.')
     parser.add_argument('--wp_dilation',
                         type=int,
                         default=int(config.wp_dilation),
@@ -316,34 +319,34 @@ def main():
                         type=int,
                         default=int(config.use_plant_labels),
                         help='Whether to use the relabeling from plant or the original labels.'
-                        'Does not work with focal loss because the implementation does not support soft targets.')
+                             'Does not work with focal loss because the implementation does not support soft targets.')
     parser.add_argument('--use_label_smoothing',
                         type=int,
                         default=int(config.use_label_smoothing),
                         help='Whether to use label smoothing in the classification losses. '
-                        'Not working as intended when combined with use_speed_weights.')
+                             'Not working as intended when combined with use_speed_weights.')
     parser.add_argument('--cpu_cores',
                         type=int,
                         required=True,
                         help='How many cpu cores are available on the machine.'
-                        'The code will spawn a thread for each cpu.')
+                             'The code will spawn a thread for each cpu.')
     parser.add_argument('--tp_attention',
                         type=int,
                         default=int(config.tp_attention),
                         help='Adds a TP at the TF decoder and computes it with attention visualization. '
-                        'Only compatible with transformer decoder.')
+                             'Only compatible with transformer decoder.')
     parser.add_argument('--multi_wp_output',
                         type=int,
                         default=int(config.multi_wp_output),
                         help='Predict 2 WP outputs and select between them. '
-                        'Only compatible with use_wp=1, transformer_decoder_join=1')
+                             'Only compatible with use_wp=1, transformer_decoder_join=1')
     parser.add_argument('--use_flow',
                         type=int,
                         default=int(config.use_flow),
                         help='Predict Otpical Flow')
-    parser.add_argument('--use_abstract_bev_sematic',
+    parser.add_argument('--use_abstract_bev_semantic',
                         type=int,
-                        default=int(config.use_abstract_bev_sematic),
+                        default=int(config.use_abstract_bev_semantic),
                         help='Use Abstract Bev Semantic')
     args = parser.parse_args()
     args.logdir = os.path.join(args.logdir, args.id)
@@ -356,7 +359,7 @@ def main():
         tmp_folder = str(os.environ.get('SCRATCH', '/tmp'))
         print('Tmp folder for dataset cache: ', tmp_folder)
         tmp_folder = tmp_folder + '/dataset_cache'
-        shared_dict = Cache(directory=tmp_folder, size_limit=int(768 * 1024**3))
+        shared_dict = Cache(directory=tmp_folder, size_limit=int(768 * 1024 ** 3))
     else:
         shared_dict = None
 
@@ -392,7 +395,7 @@ def main():
     # Configure config. Converts all arguments into config attributes
     config.initialize(**vars(args))
 
-    if args.use_abstract_bev_sematic:
+    if args.use_abstract_bev_semantic:
         config.num_bev_semantic_classes = 12
         config.bev_semantic_weights = [1 for _ in range(config.num_bev_semantic_classes)]
 
@@ -460,7 +463,8 @@ def main():
     if args.learn_multi_task_weights:
         for k in config.detailed_loss_weights:
             if config.detailed_loss_weights[k] > 0.0:
-                config.detailed_loss_weights[k] = torch.nn.Parameter(torch.zeros(1, dtype=torch.float32, requires_grad=True))
+                config.detailed_loss_weights[k] = torch.nn.Parameter(
+                    torch.zeros(1, dtype=torch.float32, requires_grad=True))
             else:
                 # These losses we don't train
                 config.detailed_loss_weights[k] = None
@@ -537,11 +541,11 @@ def main():
     if config.use_optim_groups:
         params = model.module.create_optimizer_groups(config.weight_decay)
     else:
-        params = model.parameters() # THIS
+        params = model.parameters()  # THIS
 
     if bool(args.zero_redundancy_optimizer):
         # Saves GPU memory during DDP training
-        optimizer = ZeroRedundancyOptimizer(params, optimizer_class=optim.AdamW, lr=args.lr, amsgrad=True) #THIS
+        optimizer = ZeroRedundancyOptimizer(params, optimizer_class=optim.AdamW, lr=args.lr, amsgrad=True)  #THIS
     else:
         optimizer = optim.AdamW(params, lr=args.lr, amsgrad=True)
 
@@ -714,8 +718,8 @@ class Engine(object):
             self.tensor_board_val_i += 30
         self.nut_validation_i = 0
         steps_after_log_train = (len(self.dataloader_train) - 1) / nutfuser_config.NUM_OF_TENSORBOARD_LOGS_PER_EPOCH
-        self.when_to_log_train = [0] + [round(i*steps_after_log_train) for i in range(1, nutfuser_config.NUM_OF_TENSORBOARD_LOGS_PER_EPOCH)]
-
+        self.when_to_log_train = [0] + [round(i * steps_after_log_train) for i in
+                                        range(1, nutfuser_config.NUM_OF_TENSORBOARD_LOGS_PER_EPOCH)]
 
         if rank == 0:
             visual_validation_path = os.path.join(self.args.logdir, "visual_validation")
@@ -727,20 +731,14 @@ class Engine(object):
             pathlib.Path(self.vis_save_path).mkdir(parents=True, exist_ok=True)
 
         self.detailed_loss_weights = config.detailed_loss_weights
+        self.some_random_idxs = random.sample(range(1, len(self.dataset_val)), 20)
 
     def load_data_compute_loss(self, data, validation=False):
         # Validation = True will compute additional metrics not used for optimization
         # Load data used in both methods
 
-        bb_center_heatmap = None
-        bb_wh = None
-        bb_yaw_class = None
-        bb_yaw_res = None
-        bb_offset = None
         bb_velocity = None
         bb_brake_target = None
-        bb_pixel_weight = None
-        bb_avg_factor = None
         ego_waypoint = None
         target_point = None
         command = None
@@ -756,20 +754,27 @@ class Engine(object):
             rgb = data["rgb_A_0"].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
 
         if self.config.use_semantic:
-            semantic_label = F.one_hot(data["semantic_0"][:, :, :, 0].type(torch.LongTensor), 8).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+            semantic_label = F.one_hot(data["semantic_0"][:, :, :, 0].type(torch.LongTensor), 8).permute(0, 3, 1,
+                                                                                                         2).contiguous().to(
+                self.device, dtype=torch.float32)
         else:
             semantic_label = None
         if self.config.use_bev_semantic:
-            bev_semantic_label = F.one_hot(torch.rot90(data["bev_semantic"], 3, [1, 2])[:, :, :, 0].type(torch.LongTensor), self.config.num_bev_semantic_classes).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+            bev_semantic_label = F.one_hot(
+                torch.rot90(data["bev_semantic"], 3, [1, 2])[:, :, :, 0].type(torch.LongTensor),
+                self.config.num_bev_semantic_classes).permute(0, 3, 1, 2).contiguous().to(self.device,
+                                                                                          dtype=torch.float32)
         else:
             bev_semantic_label = None
         if self.config.use_depth:
-            depth_label = (data["depth_0"][:, :, :, 0]/255).contiguous().to(self.device, dtype=torch.float32)
+            depth_label = (data["depth_0"][:, :, :, 0] / 255).contiguous().to(self.device, dtype=torch.float32)
         else:
             depth_label = None
-        lidar = data["bev_lidar"][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+        lidar = data["bev_lidar"][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(self.device,
+                                                                                                 dtype=torch.float32)
         if self.config.use_flow:
-            flow_label = (data["optical_flow_0"][:, :, :, :2] / 2**15 - 1).permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+            flow_label = (data["optical_flow_0"][:, :, :, :2] / 2 ** 15 - 1).permute(0, 3, 1, 2).contiguous().to(
+                self.device, dtype=torch.float32)
         else:
             flow_label = None
 
@@ -789,21 +794,41 @@ class Engine(object):
             command = None
             ego_vel = None
 
-        pred_wp,\
-        pred_target_speed,\
-        pred_checkpoint,\
-        pred_semantic, \
-        pred_bev_semantic, \
-        pred_depth, \
-        pred_bounding_box, _, \
-        pred_wp_1, \
-        selected_path, \
-        pred_flow = self.model(rgb=rgb,
-                            lidar_bev=lidar,
-                            target_point=target_point,
-                            ego_vel=ego_vel,
-                            command=command)
-        
+        if self.config.detect_boxes:
+            bbs = data["bounding_boxes"]
+            heatmap_label, size_map_label, offset_map_label, yaw_class_map_label, yaw_res_map_label, \
+                pixel_weight_label, num_ob_bbs_label = \
+                utils.create_ground_truth(input_size=(nutfuser_config.BEV_IMAGE_W, nutfuser_config.BEV_IMAGE_H),
+                                          num_classes=self.config.num_bb_classes,
+                                          batches_of_boxes=bbs,
+                                          )
+            heatmap_label = heatmap_label.permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+            size_map_label = size_map_label.permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+            offset_map_label = offset_map_label.permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+            yaw_class_map_label = yaw_class_map_label.to(self.device, dtype=torch.long)
+            yaw_res_map_label = yaw_res_map_label.to(self.device, dtype=torch.float32)
+            pixel_weight_label = pixel_weight_label.permute(0, 3, 1, 2).contiguous().to(self.device,
+                                                                                        dtype=torch.float32)
+            num_ob_bbs_label = num_ob_bbs_label.contiguous().to(self.device, dtype=torch.float32)
+        else:
+            heatmap_label, size_map_label, offset_map_label, yaw_class_map_label, yaw_res_map_label, \
+                pixel_weight_label, num_ob_bbs_label = [None for _ in range(7)]
+
+        pred_wp, \
+            pred_target_speed, \
+            pred_checkpoint, \
+            pred_semantic, \
+            pred_bev_semantic, \
+            pred_depth, \
+            pred_bounding_box, _, \
+            pred_wp_1, \
+            selected_path, \
+            pred_flow = self.model(rgb=rgb,
+                                   lidar_bev=lidar,
+                                   target_point=target_point,
+                                   ego_vel=ego_vel,
+                                   command=command)
+
         compute_loss = self.model.module.compute_loss
         losses = compute_loss(pred_wp=pred_wp,
                               pred_target_speed=pred_target_speed,
@@ -820,15 +845,15 @@ class Engine(object):
                               bev_semantic_label=bev_semantic_label,
                               depth_label=depth_label,
                               flow_label=flow_label,
-                              center_heatmap_label=bb_center_heatmap,
-                              wh_label=bb_wh,
-                              yaw_class_label=bb_yaw_class,
-                              yaw_res_label=bb_yaw_res,
-                              offset_label=bb_offset,
+                              center_heatmap_label=heatmap_label,
+                              wh_label=size_map_label,
+                              yaw_class_label=yaw_class_map_label,
+                              yaw_res_label=yaw_res_map_label,
+                              offset_label=offset_map_label,
                               velocity_label=bb_velocity,
                               brake_target_label=bb_brake_target,
-                              pixel_weight_label=bb_pixel_weight,
-                              avg_factor_label=bb_avg_factor,
+                              pixel_weight_label=pixel_weight_label,
+                              avg_factor_label=num_ob_bbs_label,
                               pred_wp_1=pred_wp_1,
                               selected_path=selected_path)
         self.step += 1
@@ -843,7 +868,8 @@ class Engine(object):
         self.optimizer.zero_grad(set_to_none=False)
 
         # Train loop
-        for i, data in enumerate(tqdm(self.dataloader_train, disable=self.rank != 0, desc=f"TRAIN EPOCH {self.cur_epoch}")):
+        for i, data in enumerate(
+                tqdm(self.dataloader_train, disable=self.rank != 0, desc=f"TRAIN EPOCH {self.cur_epoch}")):
 
             with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=bool(self.config.use_amp)):
                 losses = self.load_data_compute_loss(data, validation=False)
@@ -857,11 +883,12 @@ class Engine(object):
                     else:
                         ##?????????????????????????????????????????????''''
                         if key == "loss_flow":
-                            loss += value*nutfuser_config.FLOW_LOSS_MULTIPLIER
-                            detailed_losses_epoch[key] += float(value.item())*nutfuser_config.FLOW_LOSS_MULTIPLIER
+                            loss += value * nutfuser_config.FLOW_LOSS_MULTIPLIER
+                            detailed_losses_epoch[key] += float(value.item()) * nutfuser_config.FLOW_LOSS_MULTIPLIER
                         else:
-                            loss += value # self.detailed_loss_weights[key] * value # REMOVED THE WEIGHTS ON LOSSES
-                            detailed_losses_epoch[key] += float(value.item()) # float(self.detailed_loss_weights[key] * float(value.item())) # REMOVED THE WEIGHTS ON LOSSES
+                            loss += value  # self.detailed_loss_weights[key] * value # REMOVED THE WEIGHTS ON LOSSES
+                            detailed_losses_epoch[key] += float(
+                                value.item())  # float(self.detailed_loss_weights[key] * float(value.item())) # REMOVED THE WEIGHTS ON LOSSES
             self.scaler.scale(loss).backward()
 
             if self.config.use_grad_clip:
@@ -890,14 +917,12 @@ class Engine(object):
         self.model.eval()
         print("Creating Visual Evaluation Data!")
 
-        some_random_idxs = random.sample(range(1, len(self.dataset_val)), 10)
-
         folder_path = os.path.join(self.args.logdir, "visual_validation", str(self.nut_validation_i))
         self.nut_validation_i += 1
         os.mkdir(folder_path)
 
         k = 0
-        for idx in some_random_idxs:
+        for idx in self.some_random_idxs:
             data = self.dataset_val[idx]
             if self.config.use_controller_input_prediction:
                 target_point = torch.from_numpy(data["targetpoint"]).to(self.device, dtype=torch.float32)
@@ -917,87 +942,142 @@ class Engine(object):
                 ego_vel = None
 
             if self.config.use_flow:
-                rgb_a = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
-                rgb_b = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
+                rgb_a = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device,
+                                                                                                    dtype=torch.float32)
+                rgb_b = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device,
+                                                                                                    dtype=torch.float32)
                 rgb = torch.concatenate([rgb_a, rgb_b], dim=1)
             else:
-                rgb = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device, dtype=torch.float32)
-            lidar = torch.from_numpy(data["bev_lidar"])[None, :][:, :, :, 0][:, :, :, None].permute(0, 3, 1, 2).contiguous().to(self.device, dtype=torch.float32)
+                rgb = torch.from_numpy(data["rgb_A_0"]).permute(2, 0, 1).contiguous()[None, :].to(self.device,
+                                                                                                  dtype=torch.float32)
+            lidar = torch.from_numpy(data["bev_lidar"])[None, :][:, :, :, 0][:, :, :, None].permute(0, 3, 1,
+                                                                                                    2).contiguous().to(
+                self.device, dtype=torch.float32)
 
-            pred_wp,\
-            pred_target_speed,\
-            pred_checkpoint,\
-            pred_semantic, \
-            pred_bev_semantic, \
-            pred_depth, \
-            pred_bounding_box, _, \
-            pred_wp_1, \
-            selected_path, \
-            pred_flow = self.model( rgb=rgb,
-                                    lidar_bev=lidar,
-                                    target_point=target_point,
-                                    ego_vel=ego_vel,
-                                    command=command)
+            pred_wp, \
+                pred_target_speed, \
+                pred_checkpoint, \
+                pred_semantic, \
+                pred_bev_semantic, \
+                pred_depth, \
+                pred_bounding_box, _, \
+                pred_wp_1, \
+                selected_path, \
+                pred_flow = self.model(rgb=rgb,
+                                       lidar_bev=lidar,
+                                       target_point=target_point,
+                                       ego_vel=ego_vel,
+                                       command=command)
             if self.config.use_depth:
-                pred_depth = (pred_depth[0, :, :].detach().cpu().numpy()*255).astype(np.uint8)
+                pred_depth = (pred_depth[0, :, :].detach().cpu().numpy() * 255).astype(np.uint8)
             if self.config.use_semantic:
                 pred_semantic = torch.argmax(pred_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
             if self.config.use_bev_semantic:
                 pred_bev_semantic = torch.argmax(pred_bev_semantic[0, :], dim=0).detach().cpu().numpy().astype(np.uint8)
 
             if self.config.use_flow:
-                pred_flow = ((pred_flow + 1)*(2**15)).permute(0, 2, 3, 1)[0, :, :, :].contiguous().detach().cpu().numpy()
+                pred_flow = ((pred_flow + 1) * (2 ** 15)).permute(0, 2, 3, 1)[0, :, :,
+                            :].contiguous().detach().cpu().numpy()
 
             if self.config.use_depth:
-                depth_comparison = np.zeros((pred_depth.shape[0]*2, pred_depth.shape[1]), dtype=np.uint8)
+                depth_comparison = np.zeros((pred_depth.shape[0] * 2, pred_depth.shape[1]), dtype=np.uint8)
                 depth_comparison[0:pred_depth.shape[0], :] = pred_depth
                 depth_comparison[pred_depth.shape[0]:, :] = data["depth_0"][:, :, 0]
 
             if self.config.use_semantic:
-                semantic_comparison = np.zeros((pred_semantic.shape[0]*2, pred_semantic.shape[1]), dtype=np.uint8)
+                semantic_comparison = np.zeros((pred_semantic.shape[0] * 2, pred_semantic.shape[1]), dtype=np.uint8)
                 semantic_comparison[0:pred_semantic.shape[0], :] = pred_semantic
                 semantic_comparison[pred_semantic.shape[0]:, :] = data["semantic_0"][:, :, 0]
 
             if self.config.use_bev_semantic:
-                bev_semantic_comparison = np.zeros((pred_bev_semantic.shape[0]*2, pred_bev_semantic.shape[1], 3), dtype=np.uint8)
+                bev_semantic_comparison = np.zeros((pred_bev_semantic.shape[0] * 2, pred_bev_semantic.shape[1], 3),
+                                                   dtype=np.uint8)
                 pred_bev_semantic = np.rot90(pred_bev_semantic, 1)
                 bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 0] = pred_bev_semantic
                 bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 1] = pred_bev_semantic
                 bev_semantic_comparison[0:pred_bev_semantic.shape[0], :, 2] = pred_bev_semantic
 
+            if self.config.detect_boxes:
+                heatmap_pred = pred_bounding_box[0]
+                """
+                boxes_comparison = np.zeros((nutfuser_config.BEV_IMAGE_W * 2, nutfuser_config.BEV_IMAGE_H, 3),
+                                            dtype=np.uint8)
+                """
+                boxes_comparison = np.zeros((heatmap_pred.shape[2] * 2, heatmap_pred.shape[3] * 2),
+                                            dtype=np.uint8)
+                wh_pred = pred_bounding_box[1]
+                offset_pred = pred_bounding_box[2]
+                yaw_class_pred = torch.argmax(pred_bounding_box[3], dim=1)
+                yaw_res_pred = pred_bounding_box[4].squeeze(1)
+                """
+                boxes = utils.decode_predictions(heatmap_pred, wh_pred, offset_pred,
+                                                 yaw_class_pred, yaw_res_pred, score_threshold=0.6)
+                boxes_comparison[:nutfuser_config.BEV_IMAGE_W, :] =\
+                    utils.draw_bounding_boxes(boxes_comparison[:nutfuser_config.BEV_IMAGE_W, :], boxes)
+                boxes_comparison[nutfuser_config.BEV_IMAGE_W:, :] = \
+                    utils.draw_bounding_boxes(boxes_comparison[nutfuser_config.BEV_IMAGE_W:, :],
+                                              torch.tensor(data["bounding_boxes"]))
+                """
+                boxes_comparison[:heatmap_pred.shape[2], :heatmap_pred.shape[3]] = heatmap_pred[0, 0, :, :].cpu() * 255
+                boxes_comparison[heatmap_pred.shape[2]:, :heatmap_pred.shape[3]] = heatmap_pred[0, 1, :, :].cpu() * 255
+
+                heatmap_label, size_map_label, offset_map_label, yaw_class_map_label, yaw_res_map_label, \
+                    pixel_weight_label, num_ob_bbs_label = \
+                    utils.create_ground_truth(input_size=(nutfuser_config.BEV_IMAGE_W, nutfuser_config.BEV_IMAGE_H),
+                                              num_classes=self.config.num_bb_classes,
+                                              batches_of_boxes=torch.tensor([data["bounding_boxes"]]),
+                                              )
+                heatmap_label = heatmap_label.permute(0, 3, 1, 2)
+                boxes_comparison[:heatmap_pred.shape[2], heatmap_pred.shape[3]:] = heatmap_label[0, 0, :, :] * 255
+                boxes_comparison[heatmap_pred.shape[2]:, heatmap_pred.shape[3]:] = heatmap_label[0, 1, :, :] * 255
+
+                boxes_comparison = cv2.resize(boxes_comparison, ((heatmap_pred.shape[2] * 2)*4, (heatmap_pred.shape[3] * 2)*4),
+                                              interpolation=cv2.INTER_NEAREST_EXACT)
+
             rgb_ground_truth = np.zeros((data["bev_semantic"].shape[0], data["bev_semantic"].shape[1], 3))
             rgb_ground_truth[:, :] = data["bev_semantic"]
             if self.config.use_controller_input_prediction:
                 for i in range(checkpoint_label.shape[0]):
-                    rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-checkpoint_label[i, 0]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M),
-                                                                    int(128-checkpoint_label[i, 1]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
-                                                                    2, (0, 255, 0), -1)
-                    rgb_ground_truth = cv2.circle(rgb_ground_truth, (int(128-pred_checkpoint[0, i, 0]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M),
-                                                                    int(128-pred_checkpoint[0, i, 1]*256/nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
-                                                                    3, (0, 0, 255), -1)
+                    rgb_ground_truth = cv2.circle(rgb_ground_truth, (
+                        int(128 - checkpoint_label[i, 0] * 256 / nutfuser_config.BEV_SQUARE_SIDE_IN_M),
+                        int(128 - checkpoint_label[i, 1] * 256 / nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
+                                                  2, (0, 255, 0), -1)
+                    rgb_ground_truth = cv2.circle(rgb_ground_truth, (
+                        int(128 - pred_checkpoint[0, i, 0] * 256 / nutfuser_config.BEV_SQUARE_SIDE_IN_M),
+                        int(128 - pred_checkpoint[0, i, 1] * 256 / nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
+                                                  3, (0, 0, 255), -1)
                 list_target_speed = [float(el) for el in target_speed]
                 list_predicted_speed = [float(el) for el in torch.nn.functional.softmax(pred_target_speed[0])]
-                cv2.putText(rgb_ground_truth, f"{list_target_speed[0]:.2f}, {list_target_speed[1]:.2f}, {list_target_speed[2]:.2f}, {list_target_speed[3]:.2f}", (0, 128+60), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 0), thickness=2, lineType=cv2.LINE_AA)
-                cv2.putText(rgb_ground_truth, f"{list_predicted_speed[0]:.2f}, {list_predicted_speed[1]:.2f}, {list_predicted_speed[2]:.2f}, {list_predicted_speed[3]:.2f}", (0, 128+90), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 0, 255), thickness=2, lineType=cv2.LINE_AA)
+                cv2.putText(rgb_ground_truth,
+                            f"{list_target_speed[0]:.2f}, {list_target_speed[1]:.2f}, {list_target_speed[2]:.2f}, {list_target_speed[3]:.2f}",
+                            (0, 128 + 60), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0, 255, 0), thickness=2,
+                            lineType=cv2.LINE_AA)
+                cv2.putText(rgb_ground_truth,
+                            f"{list_predicted_speed[0]:.2f}, {list_predicted_speed[1]:.2f}, {list_predicted_speed[2]:.2f}, {list_predicted_speed[3]:.2f}",
+                            (0, 128 + 90), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0, 0, 255), thickness=2,
+                            lineType=cv2.LINE_AA)
 
             if self.config.use_bev_semantic:
                 bev_semantic_comparison[pred_bev_semantic.shape[0]:, :, :] = rgb_ground_truth
 
             if self.config.use_flow:
-                flow_comparison = np.zeros((pred_flow.shape[0]*2, pred_flow.shape[1], 3), dtype=np.uint8)
+                flow_comparison = np.zeros((pred_flow.shape[0] * 2, pred_flow.shape[1], 3), dtype=np.uint8)
                 # print(f"PRED\t0 : [{np.min(pred_flow[:, :, 0])}; {np.max(pred_flow[:, :, 0])}] 1 : [{np.min(pred_flow[:, :, 1])}; {np.max(pred_flow[:, :, 1])}]")
                 # print(f"LABEL\t0 : [{np.min(data['optical_flow_0'][:, :, 0])}; {np.max(data['optical_flow_0'][:, :, 0])}] 1 : [{np.min(data['optical_flow_0'][:, :, 1])}; {np.max(data['optical_flow_0'][:, :, 1])}]")
                 flow_comparison[0:pred_flow.shape[0], :, :] = utils.optical_flow_to_human(pred_flow)
-                flow_comparison[pred_flow.shape[0]:, :, :] = utils.optical_flow_to_human(data["optical_flow_0"][:, :, :2])
+                flow_comparison[pred_flow.shape[0]:, :, :] = utils.optical_flow_to_human(
+                    data["optical_flow_0"][:, :, :2])
 
             if self.config.use_depth:
                 cv2.imwrite(os.path.join(folder_path, f"depth_{k}.png"), depth_comparison)
             if self.config.use_semantic:
-                cv2.imwrite(os.path.join(folder_path, f"semantic_{k}.png"), semantic_comparison*30)
+                cv2.imwrite(os.path.join(folder_path, f"semantic_{k}.png"), semantic_comparison * 30)
             if self.config.use_bev_semantic:
-                cv2.imwrite(os.path.join(folder_path, f"bev_semantic_{k}.png"), bev_semantic_comparison*30)
+                cv2.imwrite(os.path.join(folder_path, f"bev_semantic_{k}.png"), bev_semantic_comparison * 30)
             if self.config.use_flow:
                 cv2.imwrite(os.path.join(folder_path, f"flow_{k}.png"), flow_comparison)
+            if self.config.detect_boxes:
+                cv2.imwrite(os.path.join(folder_path, f"boxes_{k}.png"), boxes_comparison)
             k += 1
         print("Finished to create Visual Evaluation Data!")
 
@@ -1088,7 +1168,7 @@ class Engine(object):
 # dataloader return the same values across workers!
 def seed_worker(worker_id):  # pylint: disable=locally-disabled, unused-argument
     # Torch initial seed is properly set across the different workers, we need to pass it to numpy and random.
-    worker_seed = (torch.initial_seed()) % 2**32
+    worker_seed = (torch.initial_seed()) % 2 ** 32
     np.random.seed(worker_seed)
     random.seed(worker_seed)
 

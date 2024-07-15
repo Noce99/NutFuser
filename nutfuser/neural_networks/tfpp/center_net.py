@@ -2,7 +2,7 @@
 Center Net Head implementation adapted from MM Detection
 """
 
-import nutfuser.neural_networks.transfuser_utils as t_u
+import nutfuser.neural_networks.tfpp.transfuser_utils as t_u
 import numpy as np
 import torch
 from torch import nn

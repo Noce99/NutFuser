@@ -723,7 +723,7 @@ def get_configs_as_dict():
     return vars_name
 
 
-def create_ground_truth(input_size, num_classes, boxes, labels, yaws, downsample_ratio=4, yaw_classes=12):
+def create_ground_truth(input_size, num_classes, batches_of_boxes, downsample_ratio=4, yaw_classes=12):
     """
     Creates ground truth heatmaps, size maps, offset maps, and yaw maps for CenterNet training.
 
@@ -742,50 +742,51 @@ def create_ground_truth(input_size, num_classes, boxes, labels, yaws, downsample
     - yaw_map: the ground truth yaw map
     """
     output_size = (input_size[0] // downsample_ratio, input_size[1] // downsample_ratio)
+    batches = batches_of_boxes.shape[0]
 
-    heatmap = np.zeros((num_classes, output_size[1], output_size[0]), dtype=np.float32)
-    size_map = np.zeros((2, output_size[1], output_size[0]), dtype=np.float32)
-    offset_map = np.zeros((2, output_size[1], output_size[0]), dtype=np.float32)
-    yaw_class_map = np.zeros((output_size[1], output_size[0]), dtype=np.int)
-    yaw_res_map = np.zeros((output_size[1], output_size[0]), dtype=np.float32)
-    pixel_weight = np.zeros((2, output_size[1], output_size[0]), dtype=np.int)
-    num_ob_bbs = len(boxes)
+    heatmap =           torch.zeros((batches, output_size[1], output_size[0], num_classes), dtype=torch.float32)
+    size_map =          torch.zeros((batches, output_size[1], output_size[0], 2),           dtype=torch.float32)
+    offset_map =        torch.zeros((batches, output_size[1], output_size[0], 2),           dtype=torch.float32)
+    yaw_class_map =     torch.zeros((batches, output_size[1], output_size[0]),              dtype=torch.long)
+    yaw_res_map =       torch.zeros((batches, output_size[1], output_size[0]),              dtype=torch.float32)
+    pixel_weight =      torch.zeros((batches, output_size[1], output_size[0], 2),           dtype=torch.int)
+    num_ob_bbs =        torch.zeros(batches,                                                dtype=torch.int)
 
     def gaussian_radius(det_size, min_overlap=0.7):
-        height, width = det_size
+        _height, _width = det_size
         a1 = 1
-        b1 = (height + width)
-        c1 = width * height * (1 - min_overlap) / (1 + min_overlap)
-        sq1 = np.sqrt(b1 ** 2 - 4 * a1 * c1)
+        b1 = (_height + _width)
+        c1 = _width * _height * (1 - min_overlap) / (1 + min_overlap)
+        sq1 = torch.sqrt(b1 ** 2 - 4 * a1 * c1)
         r1 = (b1 + sq1) / 2
 
         a2 = 4
-        b2 = 2 * (height + width)
-        c2 = (1 - min_overlap) * width * height
-        sq2 = np.sqrt(b2 ** 2 - 4 * a2 * c2)
+        b2 = 2 * (_height + _width)
+        c2 = (1 - min_overlap) * _width * _height
+        sq2 = torch.sqrt(b2 ** 2 - 4 * a2 * c2)
         r2 = (b2 + sq2) / 2
 
         a3 = 4 * min_overlap
-        b3 = 2 * min_overlap * (height + width)
-        c3 = (min_overlap - 1) * width * height
-        sq3 = np.sqrt(b3 ** 2 - 4 * a3 * c3)
+        b3 = 2 * min_overlap * (_height + _width)
+        c3 = (min_overlap - 1) * _width * _height
+        sq3 = torch.sqrt(b3 ** 2 - 4 * a3 * c3)
         r3 = (b3 + sq3) / 2
         return min(r1, r2, r3)
 
-    def draw_gaussian(heatmap, center, radius, k=1):
+    def draw_gaussian(batch, cls_id, center, radius, k=1):
         diameter = 2 * radius + 1
-        gaussian = np.exp(- ((np.arange(diameter) - radius) ** 2) / (2 * (radius / 3) ** 2))
-        gaussian = np.outer(gaussian, gaussian)
+        gaussian = torch.exp(- ((torch.arange(diameter) - radius) ** 2) / (2 * (radius / 3) ** 2))
+        gaussian = torch.outer(gaussian, gaussian)
         x, y = int(center[0]), int(center[1])
-        height, width = heatmap.shape[0:2]
+        _height, _width = output_size[1], output_size[0]
 
-        left, right = min(x, radius), min(width - x, radius + 1)
-        top, bottom = min(y, radius), min(height - y, radius + 1)
+        left, right = min(x, radius), min(_width - x, radius + 1)
+        top, bottom = min(y, radius), min(_height - y, radius + 1)
 
-        masked_heatmap = heatmap[y - top:y + bottom, x - left:x + right]
+        masked_heatmap = heatmap[batch, y - top:y + bottom, x - left:x + right, cls_id]
         masked_gaussian = gaussian[radius - top:radius + bottom, radius - left:radius + right]
         if min(masked_gaussian.shape) > 0 and min(masked_heatmap.shape) > 0:
-            np.maximum(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
+            torch.maximum(masked_heatmap, masked_gaussian * k, out=masked_heatmap)
 
     def angle2class(angle, yaw_classes=yaw_classes):
         """
@@ -797,33 +798,45 @@ def create_ground_truth(input_size, num_classes, boxes, labels, yaws, downsample
         Returns:
             tuple: Encoded discrete class and residual.
         """
-        angle = angle % (2 * np.pi)
-        angle_per_class = 2 * np.pi / float(yaw_classes)
-        shifted_angle = (angle + angle_per_class / 2) % (2 * np.pi)
+        angle = angle % (2 * torch.pi)
+        angle_per_class = 2 * torch.pi / float(yaw_classes)
+        shifted_angle = (angle + angle_per_class / 2) % (2 * torch.pi)
         angle_cls = shifted_angle // angle_per_class
         angle_res = shifted_angle - (angle_cls * angle_per_class + angle_per_class / 2)
         return int(angle_cls), angle_res
 
-    for box, label, yaw in zip(boxes, labels, yaws):
-        center_x, center_y, width, height = box
-        cls_id = label
+    for batch in range(batches_of_boxes.shape[0]):
+        num_ob_bbs[batch] = batches_of_boxes[batch].shape[0]
+        for box in batches_of_boxes[batch]:
+            center_x = box[0]
+            center_y = box[1]
+            width = box[2]
+            height = box[3]
+            yaw = box[4]
+            label = box[5]
+            cls_id = int(label)
 
-        if width > 0 and height > 0:
-            center_x_s, center_y_s = center_x / downsample_ratio, center_y / downsample_ratio
-            center = (center_x_s, center_y_s)
-            radius = gaussian_radius((height / downsample_ratio, width / downsample_ratio))
-            radius = max(0, int(radius))
+            if width > 0 and height > 0:
+                center_x_s, center_y_s = center_x / downsample_ratio, center_y / downsample_ratio
+                if center_x_s >= output_size[0]:
+                    center_x_s = output_size[0]-1
+                if center_y_s >= output_size[1]:
+                    center_y_s = output_size[1]-1
+                center = (center_x_s, center_y_s)
+                radius = gaussian_radius((height / downsample_ratio, width / downsample_ratio))
+                radius = max(0, int(radius))
 
-            draw_gaussian(heatmap[cls_id], center, radius)
+                draw_gaussian(batch, cls_id, center, radius)
 
-            size_map[:, int(center_y_s), int(center_x_s)] = [width, height]
-            offset_map[:, int(center_y_s), int(center_x_s)] = [center_x_s - int(center_x_s),
-                                                               center_y_s - int(center_y_s)]
+                size_map[batch, int(center_y_s), int(center_x_s), :] = torch.tensor([width, height])
+                offset_map[batch, int(center_y_s), int(center_x_s), :] = \
+                    torch.tensor([int(center_x_s) - int(center_x_s), int(center_y_s) - int(center_y_s)])
 
-            yaw_class_map[int(center_y_s), int(center_x_s)], yaw_res_map[int(center_y_s), int(center_x_s)] =\
-                angle2class(yaw)
+                yaw_class, yaw_res = angle2class(yaw)
+                yaw_class_map[batch, int(center_y_s), int(center_x_s)] = yaw_class
+                yaw_res_map[batch, int(center_y_s), int(center_x_s)] = yaw_res
 
-            pixel_weight[:, int(center_y_s), int(center_x_s)] = 1
+                pixel_weight[batch, int(center_y_s), int(center_x_s), :] = 1
 
     return heatmap, size_map, offset_map, yaw_class_map, yaw_res_map, pixel_weight, num_ob_bbs
 
@@ -866,36 +879,36 @@ def decode_predictions(heatmap, size_map, offset_map, yaw_class_map, yaw_res_map
         return angle
 
     boxes = []
-    labels = []
-    yaws = []
-    scores = []
 
-    heatmap = np.maximum(heatmap, 0)
-    heatmap = np.minimum(heatmap, 1)
+    heatmap[heatmap < 0] = 0
+    heatmap[heatmap > 1] = 1
 
-    for cls_id in range(heatmap.shape[0]):
-        cls_heatmap = heatmap[cls_id]
-        y_indices, x_indices = np.where(cls_heatmap >= score_threshold)
+    batches = heatmap.shape[0]
 
-        for y, x in zip(y_indices, x_indices):
-            score = cls_heatmap[y, x]
+    for batch in range(batches):
+        for cls_id in range(heatmap[batch].shape[0]):
+            y_indices, x_indices = torch.where(heatmap[batch, cls_id, :, :] >= score_threshold)
 
-            width, height = size_map[:, y, x]
-            offset_x, offset_y = offset_map[:, y, x]
-            yaw = class2angle(yaw_class_map[y, x], yaw_res_map[y, x])
+            for y, x in zip(y_indices, x_indices):
+                score = heatmap[batch, cls_id, y, x]
+                if score < score_threshold:
+                    continue
 
-            center_x = (x + offset_x) * downsample_ratio
-            center_y = (y + offset_y) * downsample_ratio
+                width, height = size_map[batch, :, y, x]
+                if width < 2 or height < 2:
+                    continue
+                offset_x, offset_y = offset_map[batch, :, y, x]
+                yaw = class2angle(yaw_class_map[batch, y, x], yaw_res_map[batch, y, x])
 
-            boxes.append([center_x, center_y, width, height])
-            labels.append(cls_id)
-            yaws.append(yaw)
-            scores.append(score)
+                center_x = (x + offset_x) * downsample_ratio
+                center_y = (y + offset_y) * downsample_ratio
 
-    return np.array(boxes), np.array(labels), np.array(yaws), np.array(scores)
+                boxes.append([center_x, center_y, width, height, yaw, cls_id, score])
+
+    return torch.tensor(boxes)
 
 
-def draw_bounding_boxes(image, boxes,  labels=None, yaws=None, thickness=2):
+def draw_bounding_boxes(image, boxes, thickness=2):
     """
     Draws bounding boxes on an image.
 
@@ -910,67 +923,44 @@ def draw_bounding_boxes(image, boxes,  labels=None, yaws=None, thickness=2):
     """
     colors = [
         (255, 0, 0),
-        (0, 255, 0)
+        (0, 255, 0),
+        (0, 0, 255)
     ]
-    if len(boxes) == 0:
-        return image
-    if yaws is not None:
-        assert len(boxes) == len(yaws)
-        assert len(boxes[0]) < 6
-    else:
-        assert len(boxes[0]) > 4
-    if labels is not None:
-        assert len(boxes) == len(labels)
-        assert len(boxes[0]) < 6
-    else:
-        assert len(boxes[0]) > 4
-    if labels is not None and yaws is not None:
-        assert len(boxes[0]) == 4
-    if labels is None and yaws is None:
-        assert len(boxes[0]) == 6
-    for i in range(len(boxes)):
+
+    for i in range(boxes.shape[0]):
         center_x = boxes[i][0]
         center_y = boxes[i][1]
         width = boxes[i][2]
         height = boxes[i][3]
-        if width < 2 or height < 2:
-            continue
-        if yaws is not None:
-            yaw = yaws[i]
-        else:
-            yaw = boxes[i][4]
-        if labels is not None:
-            label = labels[i]
-        else:
-            label = boxes[i][5]
-        color = colors[label]
+        yaw = boxes[i][4]
+        cls_id = boxes[i][5]
+
+        color = colors[int(cls_id)]
         center = (int(center_x), int(center_y))
 
-        print(f"{(int(center_x), int(center_y))}, {(width, height)}, yaw={yaw}, label={label}")
-
         # Calculate corner points of the bounding box
-        cos_yaw = np.cos(yaw)
-        sin_yaw = np.sin(yaw)
+        cos_yaw = torch.cos(yaw)
+        sin_yaw = torch.sin(yaw)
 
         half_width = width / 2
         half_height = height / 2
 
-        points = np.array([
+        points = torch.tensor([
             [-half_width, -half_height],
             [half_width, -half_height],
             [half_width, half_height],
             [-half_width, half_height]
         ])
 
-        rotation_matrix = np.array([
+        rotation_matrix = torch.tensor([
             [cos_yaw, -sin_yaw],
             [sin_yaw, cos_yaw]
         ])
 
-        rotated_points = np.dot(points, rotation_matrix)
-        translated_points = rotated_points + np.array(center)
+        rotated_points = torch.tensor([(rotation_matrix @ points[i]).tolist() for i in range(4)])
+        translated_points = rotated_points + torch.tensor(center)
 
-        pts = translated_points.astype(np.int32)
+        pts = translated_points.numpy().astype(np.int32)
         pts = pts.reshape((-1, 1, 2))
 
         # Draw the bounding box
@@ -988,62 +978,39 @@ if __name__ == "__main__":
     import neural_networks.tfpp.config as tf_config
 
     a_config = tf_config.GlobalConfig()
-    """
-    bboxes = [
-        {"class": "car", "extent": [100.0, 100.0, 100.0], "position": [1.0, 1.0, 1.0], "yaw": 1.0},
-        {"class": "car", "extent": [200.0, 200.0, 200.0], "position": [2.0, 2.0, 2.0], "yaw": 2.0},
-        {"class": "car", "extent": [300.0, 300.0, 300.0], "position": [3.0, 3.0, 3.0], "yaw": 3.0},
-        {"class": "walker", "extent": [1.0, 1.0, 1.0], "position": [0.0, 0.0, 0.0], "yaw": 0.0},
-        {"class": "walker", "extent": [1.0, 1.0, 1.0], "position": [0.0, 0.0, 0.0], "yaw": 0.0}
-    ]
-    data = parse_bounding_boxes(bboxes, a_config)
-
-    for key in data:
-        data[key] = torch.tensor(data[key])
-        if data[key].dim() > 0:
-            data[key] = data[key][None, :]
-        else:
-            data[key] = data[key][None]
-        print(f"{key} = {data[key].shape}")
-
-    from neural_networks.tfpp.center_net import LidarCenterNetHead
-
-    head = LidarCenterNetHead(a_config)
-    batch_bboxes = head.decode_heatmap(center_heatmap_pred=data["center_heatmap"],
-                                       wh_pred=data["wh"],
-                                       offset_pred=data["offset"],
-                                       yaw_class_pred=data["yaw_class"],
-                                       yaw_res_pred=data["yaw_res"],
-                                       velocity_pred=data["velocity"],
-                                       brake_pred=data["brake_target"])
-    print(batch_bboxes)
-    """
+    import torch
     # Example usage:
     input_size = (512, 512)
     num_classes = 2
-    boxes = [[100, 100, 50, 50], [200, 200, 50, 50], [300, 300, 50, 50]]  # Example bounding boxes
-    labels = [0, 0, 1]  # Example class labels
-    yaws = [0.5, 0.0, -0.5]  # Example yaw angles in radians
+    boxes = torch.tensor([
+                            [[100, 100, 50, 50, 0.5, 0],
+                             [200, 200, 50, 50, 0.0, 0],
+                             [300, 300, 50, 50, -0.5, 1]],
+                         ])  # Example bbs
 
     heatmap, size_map, offset_map, yaw_class_map, yaw_res_map, pixel_weight, num_ob_bbs =\
-        create_ground_truth(input_size, num_classes, boxes, labels, yaws, downsample_ratio=4)
+        create_ground_truth(input_size, num_classes, boxes, downsample_ratio=4)
+
+    import matplotlib.pyplot as plt
+    imgplot = plt.imshow(pixel_weight[0, :, :, 0])
+    plt.show()
+    imgplot = plt.imshow(heatmap[0, :, :, 0])
+    plt.show()
+    imgplot = plt.imshow(heatmap[0, :, :, 1])
+    plt.show()
 
     # Example usage:
     # Assuming heatmap, size_map, offset_map, yaw_map are the predicted maps from the model
     # heatmap, size_map, offset_map, yaw_map = model_output
 
-    boxes, labels, yaws, scores =\
-        decode_predictions(heatmap, size_map, offset_map, yaw_class_map, yaw_res_map, score_threshold=0.9,
-                           downsample_ratio=4, yaw_classes=12)
+    boxes = decode_predictions(heatmap, size_map, offset_map, yaw_class_map, yaw_res_map, score_threshold=0.9,
+                               downsample_ratio=4, yaw_classes=12)
+
+    print(boxes.shape)
 
     image = np.zeros((512, 512, 3))
-    image = draw_bounding_boxes(image, boxes, labels, yaws)
+    image = draw_bounding_boxes(image, boxes)
 
-    import matplotlib.pyplot as plt
-    imgplot = plt.imshow(pixel_weight[0])
-    plt.show()
-    imgplot = plt.imshow(heatmap[1])
-    plt.show()
     cv2.imshow("bbs", image)
 
     cv2.waitKey(0)

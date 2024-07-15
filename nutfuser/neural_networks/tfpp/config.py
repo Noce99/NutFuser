@@ -535,7 +535,7 @@ class GlobalConfig:
         self.plant_max_speed_pred = 60.0  # Maximum speed we classify when forcasting cars.
         self.forcast_time = 0.5  # Number of seconds we forcast into the future
 
-        self.use_abstract_bev_sematic = False
+        self.use_abstract_bev_semantic = False
 
     def initialize(self, root_dir='', setting='all', **kwargs):
         for k, v in kwargs.items():

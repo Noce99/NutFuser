@@ -18,7 +18,7 @@ import transfuser_utils as t_u
 import gaussian_target as g_t
 import random
 from sklearn.utils.class_weight import compute_class_weight
-from center_net import angle2class
+from center_net import LidarCenterNetHead
 from imgaug import augmenters as ia
 
 
@@ -770,7 +770,7 @@ class CARLA_Data(Dataset):  # pylint: disable=locally-disabled, invalid-name
             wh_target[0, cty_int, ctx_int] = extent_x
             wh_target[1, cty_int, ctx_int] = extent_y
 
-            yaw_class, yaw_res = angle2class(gt_bboxes[j, 4])
+            yaw_class, yaw_res = LidarCenterNetHead.angle2class(gt_bboxes[j, 4])
 
             yaw_class_target[0, cty_int, ctx_int] = yaw_class
             yaw_res_target[0, cty_int, ctx_int] = yaw_res
