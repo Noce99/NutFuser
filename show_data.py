@@ -7,6 +7,8 @@ import argparse
 import math
 import json
 
+import torch
+
 from nutfuser import config
 from nutfuser import utils
 from carla_birdeye_view import RGB_BY_MASK, inv_INDEX_BY_MASK
@@ -224,7 +226,7 @@ def print_section(screen, number, dataset_path):
                 bb[2] *= 2
                 bb[3] *= 2
             my_rgb_array = np.zeros((config.BEV_IMAGE_H * 2, config.BEV_IMAGE_W * 2, 3), dtype=np.uint8)
-            my_rgb_array = utils.draw_bounding_boxes(my_rgb_array, bbs)
+            my_rgb_array = utils.draw_bounding_boxes(my_rgb_array, torch.tensor(bbs))
             img = pygame.surfarray.make_surface(my_rgb_array)
             img.convert()
             rect = img.get_rect()

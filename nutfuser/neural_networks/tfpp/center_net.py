@@ -1,12 +1,14 @@
 """
 Center Net Head implementation adapted from MM Detection
 """
-
+import pathlib
+import sys
+sys.path.append(str(pathlib.Path(
+    __file__).parent.resolve().parent.resolve().parent.resolve().parent.resolve()))
 import nutfuser.neural_networks.tfpp.transfuser_utils as t_u
 import numpy as np
 import torch
 from torch import nn
-import gaussian_target as g_t
 
 
 class LidarCenterNetHead(nn.Module):

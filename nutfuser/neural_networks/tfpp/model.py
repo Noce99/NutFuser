@@ -27,8 +27,9 @@ import pdb
 import datetime
 
 SHOW_STUFF = False
-M_to_PX = 256/64
+M_to_PX = 256 / 64
 OUTPUT_VIDEO = None
+
 
 class LidarCenterNet(nn.Module):
     """
@@ -51,7 +52,9 @@ class LidarCenterNet(nn.Module):
             now = datetime.datetime.now()
             file_name = f"{now.day}_{now.month}_{now.year}-{now.hour}-{now.minute}-{now.second}.mp4"
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            OUTPUT_VIDEO = cv2.VideoWriter(f"/home/enrico/Projects/Carla/carla_garage/output_video_evaluation/{file_name}", fourcc, 15, (1576, 828))
+            OUTPUT_VIDEO = cv2.VideoWriter(
+                f"/home/enrico/Projects/Carla/carla_garage/output_video_evaluation/{file_name}", fourcc, 15,
+                (1576, 828))
         self.config = config
 
         # self.data = CARLA_Data(root=[], config=self.config, shared_dict=None)
@@ -59,7 +62,7 @@ class LidarCenterNet(nn.Module):
         self.speed_histogram = []
         self.make_histogram = int(os.environ.get('HISTOGRAM', 0))
 
-        if self.config.backbone == 'transFuser': # <--------
+        if self.config.backbone == 'transFuser':  # <--------
             self.backbone = TransfuserBackbone(config)
         elif self.config.backbone == 'aim':
             self.backbone = AIMBackbone(config)
@@ -76,9 +79,9 @@ class LidarCenterNet(nn.Module):
 
         self.extra_sensors = self.config.use_velocity or self.config.use_discrete_command
         extra_sensor_channels = 0
-        if self.extra_sensors: # <------------ True
+        if self.extra_sensors:  # <------------ True
             extra_sensor_channels = self.config.extra_sensor_channels
-            if self.config.transformer_decoder_join: # <------------------------ True
+            if self.config.transformer_decoder_join:  # <------------------------ True
                 extra_sensor_channels = self.config.gru_input_size
 
         # prediction heads
@@ -138,21 +141,29 @@ class LidarCenterNet(nn.Module):
 
         if self.config.use_flow:
             self.flow_decoder = t_u.PerspectiveDecoder(
-                  in_channels=self.backbone.num_image_features,
-                  out_channels=2,
-                  inter_channel_0=self.config.deconv_channel_num_0,
-                  inter_channel_1=self.config.deconv_channel_num_1,
-                  inter_channel_2=self.config.deconv_channel_num_2,
-                  scale_factor_0=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_0,
-                  scale_factor_1=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_1)
+                in_channels=self.backbone.num_image_features,
+                out_channels=2,
+                inter_channel_0=self.config.deconv_channel_num_0,
+                inter_channel_1=self.config.deconv_channel_num_1,
+                inter_channel_2=self.config.deconv_channel_num_2,
+                scale_factor_0=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_0,
+                scale_factor_1=self.backbone.perspective_upsample_factor // self.config.deconv_scale_factor_1)
 
         if self.config.use_controller_input_prediction:
             if self.config.transformer_decoder_join:
                 ts_input_channel = self.config.gru_input_size
             else:
                 ts_input_channel = self.config.gru_hidden_size
-            self.target_speed_network = nn.Sequential(nn.Linear(ts_input_channel, ts_input_channel), nn.ReLU(inplace=True),
-                                                      nn.Linear(ts_input_channel, len(config.target_speeds)))
+            if self.config.predict_speed:
+                self.target_speed_acceleration_network = nn.Sequential(nn.Linear(ts_input_channel, ts_input_channel),
+                                                                       nn.ReLU(inplace=True),
+                                                                       nn.Linear(ts_input_channel,
+                                                                                 len(config.target_speeds)))
+            else:
+                assert bool(self.config.predict_acceleration) is True
+                self.target_speed_acceleration_network = nn.Sequential(nn.Linear(ts_input_channel, ts_input_channel),
+                                                                       nn.ReLU(inplace=True),
+                                                                       nn.Linear(ts_input_channel, 3))
 
         if self.config.use_controller_input_prediction or self.config.use_wp_gru:
             if self.config.transformer_decoder_join:
@@ -186,15 +197,18 @@ class LidarCenterNet(nn.Module):
                 if self.config.use_wp_gru:
                     if self.config.multi_wp_output:
                         self.wp_query = nn.Parameter(
-                            torch.zeros(1, 2 * (config.pred_len // self.config.wp_dilation) + 1, self.config.gru_input_size))
+                            torch.zeros(1, 2 * (config.pred_len // self.config.wp_dilation) + 1,
+                                        self.config.gru_input_size))
 
                         self.wp_decoder = GRUWaypointsPredictorInterFuser(input_dim=self.config.gru_input_size,
                                                                           hidden_size=self.config.gru_hidden_size,
-                                                                          waypoints=(config.pred_len // self.config.wp_dilation),
+                                                                          waypoints=(
+                                                                                  config.pred_len // self.config.wp_dilation),
                                                                           target_point_size=target_point_size)
                         self.wp_decoder_1 = GRUWaypointsPredictorInterFuser(input_dim=self.config.gru_input_size,
                                                                             hidden_size=self.config.gru_hidden_size,
-                                                                            waypoints=(config.pred_len // self.config.wp_dilation),
+                                                                            waypoints=(
+                                                                                    config.pred_len // self.config.wp_dilation),
                                                                             target_point_size=target_point_size)
                         self.select_wps = nn.Linear(self.config.gru_input_size, 1)
                     else:
@@ -203,7 +217,8 @@ class LidarCenterNet(nn.Module):
 
                         self.wp_decoder = GRUWaypointsPredictorInterFuser(input_dim=self.config.gru_input_size,
                                                                           hidden_size=self.config.gru_hidden_size,
-                                                                          waypoints=(config.pred_len // self.config.wp_dilation),
+                                                                          waypoints=(
+                                                                                  config.pred_len // self.config.wp_dilation),
                                                                           target_point_size=target_point_size)
 
                 if self.config.use_controller_input_prediction:
@@ -235,7 +250,8 @@ class LidarCenterNet(nn.Module):
 
                 if self.config.use_wp_gru:
                     self.wp_decoder = GRUWaypointsPredictorTransFuser(self.config,
-                                                                      pred_len=(config.pred_len // self.config.wp_dilation),
+                                                                      pred_len=(
+                                                                              config.pred_len // self.config.wp_dilation),
                                                                       hidden_size=self.config.gru_hidden_size,
                                                                       target_point_size=target_point_size)
 
@@ -252,7 +268,7 @@ class LidarCenterNet(nn.Module):
                     # Lazy version of normalizing the input over the dataset statistics.
                     self.velocity_normalization = nn.BatchNorm1d(1, affine=False)
                     extra_size += 1
-                if self.config.use_discrete_command: # <------------ True
+                if self.config.use_discrete_command:  # <------------ True
                     extra_size += 6
                 self.extra_sensor_encoder = nn.Sequential(nn.Linear(extra_size, 128), nn.ReLU(inplace=True),
                                                           nn.Linear(128, extra_sensor_channels), nn.ReLU(inplace=True))
@@ -277,10 +293,11 @@ class LidarCenterNet(nn.Module):
                                                          k_i=self.config.speed_ki,
                                                          k_d=self.config.speed_kd,
                                                          n=self.config.speed_n)
-        if self.config.use_speed_weights:
-            self.speed_weights = torch.tensor(self.config.target_speed_weights)
-        else:
-            self.speed_weights = torch.ones_like(torch.tensor(self.config.target_speed_weights))
+        if self.config.use_controller_input_prediction or self.config.use_wp_gru:
+            if self.config.use_speed_weights:
+                self.speed_weights = torch.tensor(self.config.target_speed_weights)
+            else:
+                self.speed_weights = torch.ones_like(torch.tensor(self.config.target_speed_weights))
 
         if self.config.use_semantic:
             self.semantic_weights = torch.tensor(self.config.semantic_weights)
@@ -292,11 +309,11 @@ class LidarCenterNet(nn.Module):
         else:
             label_smoothing = 0.0
 
-        if self.config.use_focal_loss:
-            self.loss_speed = FocalLoss(alpha=self.speed_weights, gamma=self.config.focal_loss_gamma)
-
-        else:
-            self.loss_speed = nn.CrossEntropyLoss(weight=self.speed_weights, label_smoothing=label_smoothing)
+        if self.config.use_controller_input_prediction or self.config.use_wp_gru:
+            if self.config.use_focal_loss:
+                self.loss_speed = FocalLoss(alpha=self.speed_weights, gamma=self.config.focal_loss_gamma)
+            else:
+                self.loss_speed = nn.CrossEntropyLoss(weight=self.speed_weights, label_smoothing=label_smoothing)
 
         if self.config.use_semantic:
             self.loss_semantic = nn.CrossEntropyLoss(weight=self.semantic_weights, label_smoothing=label_smoothing)
@@ -308,13 +325,13 @@ class LidarCenterNet(nn.Module):
             self.selection_loss = nn.BCEWithLogitsLoss()
 
     def reset_parameters(self):
-        if self.config.use_wp_gru:# NOT ENTERING
+        if self.config.use_wp_gru:  # NOT ENTERING
             nn.init.uniform_(self.wp_query)
-        if self.config.use_controller_input_prediction: # <------------ True
+        if self.config.use_controller_input_prediction:  # <------------ True
             nn.init.uniform_(self.checkpoint_query)
-        if self.extra_sensors: # <------------ True
+        if self.extra_sensors:  # <------------ True
             nn.init.uniform_(self.extra_sensor_pos_embed)
-        if self.config.tp_attention: # NOT ENTERING
+        if self.config.tp_attention:  # NOT ENTERING
             nn.init.uniform_(self.tp_pos_embed)
 
     def forward(self, rgb, lidar_bev, target_point, ego_vel, command):
@@ -350,6 +367,11 @@ class LidarCenterNet(nn.Module):
             if self.extra_sensors:
                 extra_sensors = []
                 if self.config.use_velocity:
+                    # THERE IS WHERE IT BRAKES WITH BATCH == 1
+                    # torch.Size([1, 1]) (BATCH 1)
+                    # torch.Size([2, 1]) (BATCH 2)
+                    # torch.Size([3, 1]) (BATCH 3)
+
                     extra_sensors.append(self.velocity_normalization(ego_vel))
                 if self.config.use_discrete_command:
                     extra_sensors.append(command)
@@ -359,7 +381,7 @@ class LidarCenterNet(nn.Module):
                 if self.config.transformer_decoder_join:
                     extra_sensors = extra_sensors + self.extra_sensor_pos_embed.repeat(bs, 1)
                     fused_features = torch.cat((fused_features, extra_sensors.unsqueeze(2)), axis=2)
-                else: # NOT ENTERING
+                else:  # NOT ENTERING
                     fused_features = torch.cat((fused_features, extra_sensors), axis=1)
 
             if self.config.transformer_decoder_join:
@@ -397,7 +419,7 @@ class LidarCenterNet(nn.Module):
                     gru_features = joined_checkpoint_features[:, :self.config.predict_checkpoint_len]
                     target_speed_features = joined_checkpoint_features[:, self.config.predict_checkpoint_len]
                     pred_checkpoint = self.checkpoint_decoder(gru_features, target_point)
-                    pred_target_speed = self.target_speed_network(target_speed_features)
+                    pred_target_speed = self.target_speed_acceleration_network(target_speed_features)
 
             else:
                 joined_features = self.join(fused_features)
@@ -408,7 +430,7 @@ class LidarCenterNet(nn.Module):
                     pred_wp = self.wp_decoder(gru_features, target_point)
                 if self.config.use_controller_input_prediction:
                     pred_checkpoint = self.checkpoint_decoder(gru_features, target_point)
-                    pred_target_speed = self.target_speed_network(target_speed_features)
+                    pred_target_speed = self.target_speed_acceleration_network(target_speed_features)
 
         # Auxiliary tasks
         pred_semantic = None
@@ -417,8 +439,8 @@ class LidarCenterNet(nn.Module):
 
         pred_depth = None
         if self.config.use_depth:
-            pred_depth = self.depth_decoder(image_feature_grid) # [1, 1, 256, 1024]
-            pred_depth = torch.sigmoid(pred_depth).squeeze(1) # [1, 256, 1024]
+            pred_depth = self.depth_decoder(image_feature_grid)  # [1, 1, 256, 1024]
+            pred_depth = torch.sigmoid(pred_depth).squeeze(1)  # [1, 256, 1024]
 
         pred_flow = None
         if self.config.use_flow:
@@ -561,17 +583,19 @@ class LidarCenterNet(nn.Module):
         # ----
 
         return pred_wp, pred_target_speed, pred_checkpoint, pred_semantic, pred_bev_semantic, pred_depth, \
-          pred_bounding_box, attention_weights, pred_wp_1, selected_path, pred_flow
+            pred_bounding_box, attention_weights, pred_wp_1, selected_path, pred_flow
 
-# FORWARD FINISH THERE!!!!!!!!!!!!!!!!!!!!
+    # FORWARD FINISH THERE!!!!!!!!!!!!!!!!!!!!
 
-    def compute_loss(self, pred_wp, pred_target_speed, pred_checkpoint, pred_semantic, pred_bev_semantic, pred_depth, pred_flow,
+    def compute_loss(self, pred_wp, pred_target_speed, pred_checkpoint, pred_semantic, pred_bev_semantic, pred_depth,
+                     pred_flow,
                      pred_bounding_box, pred_wp_1, selected_path, waypoint_label, target_speed_label, checkpoint_label,
-                     semantic_label, bev_semantic_label, depth_label, flow_label, center_heatmap_label, wh_label, yaw_class_label,
+                     semantic_label, bev_semantic_label, depth_label, flow_label, center_heatmap_label, wh_label,
+                     yaw_class_label,
                      yaw_res_label, offset_label, velocity_label, brake_target_label, pixel_weight_label,
                      avg_factor_label):
         loss = {}
-        if self.config.use_wp_gru:# NOT ENTERING
+        if self.config.use_wp_gru:  # NOT ENTERING
             if self.config.multi_wp_output:
                 loss_wp = torch.mean(torch.abs(pred_wp - waypoint_label), dim=(1, 2))
                 loss_wp_1 = torch.mean(torch.abs(pred_wp_1 - waypoint_label), dim=(1, 2))
@@ -586,7 +610,7 @@ class LidarCenterNet(nn.Module):
                 loss_wp = torch.mean(torch.abs(pred_wp - waypoint_label))
                 loss.update({'loss_wp': loss_wp})
 
-        if self.config.use_controller_input_prediction:# <------------ True
+        if self.config.use_controller_input_prediction:  # <------------ True
             loss_target_speed = self.loss_speed(pred_target_speed, target_speed_label)
             loss.update({'loss_target_speed': loss_target_speed})
 
@@ -609,14 +633,17 @@ class LidarCenterNet(nn.Module):
             loss.update({'loss_depth': loss_depth})
 
         if self.config.use_flow:
-            loss_flow = nn.MSELoss(reduction="mean")(pred_flow, flow_label) # maybe reduction should be sum?
+            loss_flow = nn.MSELoss(reduction="mean")(pred_flow, flow_label)  # maybe reduction should be sum?
             # print(f"pred_flow : [{torch.min(pred_flow)}; {torch.max(pred_flow)}]")
             # print(f"flow_label : [{torch.min(flow_label)}; {torch.max(flow_label)}]")
             loss.update({'loss_flow': loss_flow})
 
         if self.config.detect_boxes:
-            loss_bbox = self.head.loss(pred_bounding_box[0], pred_bounding_box[1], pred_bounding_box[2],
-                                       pred_bounding_box[3], pred_bounding_box[4],
+            enter_heatmap_pred, wh_pred, offset_pred, yaw_class_pred, yaw_res_pred = \
+                (pred_bounding_box[0], pred_bounding_box[1], pred_bounding_box[2],
+                 pred_bounding_box[3], pred_bounding_box[4])
+            yaw_res_pred = yaw_res_pred.squeeze(1)
+            loss_bbox = self.head.loss(enter_heatmap_pred, wh_pred, offset_pred, yaw_class_pred, yaw_res_pred,
                                        center_heatmap_label, wh_label, yaw_class_label, yaw_res_label, offset_label,
                                        pixel_weight_label, avg_factor_label)
 
@@ -633,7 +660,8 @@ class LidarCenterNet(nn.Module):
 
         carla_bboxes = []
         for bbox in bboxes.detach().cpu().numpy():
-            bbox = t_u.bb_image_to_vehicle_system(bbox, self.config.pixels_per_meter, self.config.min_x, self.config.min_y)
+            bbox = t_u.bb_image_to_vehicle_system(bbox, self.config.pixels_per_meter, self.config.min_x,
+                                                  self.config.min_y)
             carla_bboxes.append(bbox)
 
         return carla_bboxes
@@ -779,7 +807,7 @@ class LidarCenterNet(nn.Module):
                     decay.add(fpn)
                 elif pn.endswith('weight') and '.mlp' in pn:  # MLP linear layers
                     decay.add(fpn)
-                elif pn.endswith('weight') and 'target_speed_network' in pn:  # MLP linear layers
+                elif pn.endswith('weight') and 'target_speed_acceleration_network' in pn:  # MLP linear layers
                     decay.add(fpn)
                 elif pn.endswith('weight') and 'join.' in pn and not '.norm' in pn:  # MLP layers
                     decay.add(fpn)
@@ -807,7 +835,7 @@ class LidarCenterNet(nn.Module):
         union_params = decay | no_decay
         assert (len(inter_params) == 0), f'parameters {str(inter_params)} made it into both decay/no_decay sets!'
         assert (
-            len(param_dict.keys() - union_params) == 0
+                len(param_dict.keys() - union_params) == 0
         ), f'parameters {str(param_dict.keys() - union_params)} were not ' \
            f'separated into either decay/no_decay set!'
 
@@ -827,8 +855,10 @@ class LidarCenterNet(nn.Module):
     def init_visualization(self):
         # Privileged map access for visualization
         if self.config.debug:
-            from birds_eye_view.chauffeurnet import ObsManager  # pylint: disable=locally-disabled, import-outside-toplevel
-            from srunner.scenariomanager.carla_data_provider import CarlaDataProvider  # pylint: disable=locally-disabled, import-outside-toplevel
+            from birds_eye_view.chauffeurnet import \
+                ObsManager  # pylint: disable=locally-disabled, import-outside-toplevel
+            from srunner.scenariomanager.carla_data_provider import \
+                CarlaDataProvider  # pylint: disable=locally-disabled, import-outside-toplevel
             obs_config = {
                 'width_in_pixels': self.config.lidar_resolution_width * 4,
                 'pixels_ev_to_bottom': self.config.lidar_resolution_height / 2.0 * 4,
@@ -844,26 +874,27 @@ class LidarCenterNet(nn.Module):
 
     @torch.no_grad()
     def visualize_model(  # pylint: disable=locally-disabled, unused-argument
-        self,
-        save_path,
-        step,
-        rgb,
-        lidar_bev,
-        target_point,
-        pred_wp,
-        pred_semantic=None,
-        pred_bev_semantic=None,
-        pred_depth=None,
-        pred_checkpoint=None,
-        pred_speed=None,
-        pred_bb=None,
-        gt_wp=None,
-        gt_bbs=None,
-        gt_speed=None,
-        gt_bev_semantic=None,
-        wp_selected=None):
+            self,
+            save_path,
+            step,
+            rgb,
+            lidar_bev,
+            target_point,
+            pred_wp,
+            pred_semantic=None,
+            pred_bev_semantic=None,
+            pred_depth=None,
+            pred_checkpoint=None,
+            pred_speed=None,
+            pred_bb=None,
+            gt_wp=None,
+            gt_bbs=None,
+            gt_speed=None,
+            gt_bev_semantic=None,
+            wp_selected=None):
         # 0 Car, 1 Pedestrian, 2 Red light, 3 Stop sign
-        color_classes = [np.array([255, 165, 0]), np.array([0, 255, 0]), np.array([255, 0, 0]), np.array([250, 160, 160])]
+        color_classes = [np.array([255, 165, 0]), np.array([0, 255, 0]), np.array([255, 0, 0]),
+                         np.array([250, 160, 160])]
 
         size_width = int((self.config.max_y - self.config.min_y) * self.config.pixels_per_meter)
         size_height = int((self.config.max_x - self.config.min_x) * self.config.pixels_per_meter)
@@ -964,13 +995,14 @@ class LidarCenterNet(nn.Module):
         if self.config.use_tp:
             x_tp = target_point[0][0] * loc_pixels_per_meter + origin[0]
             y_tp = target_point[0][1] * loc_pixels_per_meter + origin[1]
-            cv2.circle(images_lidar, (int(x_tp), int(y_tp)), radius=12, lineType=cv2.LINE_AA, color=(255, 0, 0), thickness=-1)
+            cv2.circle(images_lidar, (int(x_tp), int(y_tp)), radius=12, lineType=cv2.LINE_AA, color=(255, 0, 0),
+                       thickness=-1)
 
         # Visualize Ego vehicle
         sample_box = np.array([
             int(images_lidar.shape[0] / 2),
             int(images_lidar.shape[1] / 2), self.config.ego_extent_x * loc_pixels_per_meter,
-            self.config.ego_extent_y * loc_pixels_per_meter,
+                                            self.config.ego_extent_y * loc_pixels_per_meter,
             np.deg2rad(90.0), 0.0
         ])
         images_lidar = t_u.draw_box(images_lidar, sample_box, color=(0, 200, 0), pixel_per_meter=16, thickness=4)
@@ -989,7 +1021,8 @@ class LidarCenterNet(nn.Module):
             gt_bbs = gt_bbs[real_boxes]
             for box in gt_bbs:
                 box[:4] = box[:4] * scale_factor
-                images_lidar = t_u.draw_box(images_lidar, box, color=(0, 255, 255), pixel_per_meter=loc_pixels_per_meter)
+                images_lidar = t_u.draw_box(images_lidar, box, color=(0, 255, 255),
+                                            pixel_per_meter=loc_pixels_per_meter)
 
         images_lidar = np.rot90(images_lidar, k=1)
 
@@ -1029,23 +1062,23 @@ class GRUWaypointsPredictorInterFuser(nn.Module):
         self.gru = torch.nn.GRU(input_size=input_dim, hidden_size=hidden_size, batch_first=True)
         if target_point_size > 0:
             self.encoder = nn.Linear(target_point_size, hidden_size)
-        self.target_point_size = target_point_size # 2
-        self.hidden_size = hidden_size # 64
+        self.target_point_size = target_point_size  # 2
+        self.hidden_size = hidden_size  # 64
         self.decoder = nn.Linear(hidden_size, 2)
-        self.waypoints = waypoints # 10
+        self.waypoints = waypoints  # 10
 
     def forward(self, x, target_point):
         # x.shape = [BS, 10, 256]
         # target_point.shape = [BS, 2]
         bs = x.shape[0]
         if self.target_point_size > 0:
-            z = self.encoder(target_point).unsqueeze(0) # [1, BS, 64]
+            z = self.encoder(target_point).unsqueeze(0)  # [1, BS, 64]
         else:
-            z = torch.zeros((1, bs, self.hidden_size), device=x.device) # [1, BS, 64]
-        output, _ = self.gru(x, z) # [BS, 10, 64]
-        output = output.reshape(bs * self.waypoints, -1) # [BS*10, 64]
-        output = self.decoder(output).reshape(bs, self.waypoints, 2) # [BS*10, 2] -> [BS, 10, 2]
-        output = torch.cumsum(output, 1) # [BS, 10, 2]
+            z = torch.zeros((1, bs, self.hidden_size), device=x.device)  # [1, BS, 64]
+        output, _ = self.gru(x, z)  # [BS, 10, 64]
+        output = output.reshape(bs * self.waypoints, -1)  # [BS*10, 64]
+        output = self.decoder(output).reshape(bs, self.waypoints, 2)  # [BS*10, 2] -> [BS, 10, 2]
+        output = torch.cumsum(output, 1)  # [BS, 10, 2]
         return output
 
 
@@ -1119,13 +1152,13 @@ class PositionEmbeddingSine(nn.Module):
         not_mask = torch.ones((bs, h, w), device=x.device)
         y_embed = not_mask.cumsum(1, dtype=torch.float32)
         x_embed = not_mask.cumsum(2, dtype=torch.float32)
-        if self.normalize: # TRUE
+        if self.normalize:  # TRUE
             eps = 1e-6
             y_embed = y_embed / (y_embed[:, -1:, :] + eps) * self.scale
             x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
         dim_t = torch.arange(self.num_pos_feats, dtype=torch.float32, device=x.device)
-        dim_t = self.temperature**(2 * (torch.div(dim_t, 2, rounding_mode='floor')) / self.num_pos_feats)
+        dim_t = self.temperature ** (2 * (torch.div(dim_t, 2, rounding_mode='floor')) / self.num_pos_feats)
 
         pos_x = x_embed[:, :, :, None] / dim_t
         pos_y = y_embed[:, :, :, None] / dim_t

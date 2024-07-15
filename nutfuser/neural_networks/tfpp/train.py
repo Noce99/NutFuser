@@ -348,6 +348,14 @@ def main():
                         type=int,
                         default=int(config.use_abstract_bev_semantic),
                         help='Use Abstract Bev Semantic')
+    parser.add_argument('--predict_speed',
+                        type=int,
+                        default=int(config.predict_speed),
+                        help='Predict the Speed')
+    parser.add_argument('--predict_acceleration',
+                        type=int,
+                        default=int(config.predict_acceleration),
+                        help='Predict the Acceleration')
     args = parser.parse_args()
     args.logdir = os.path.join(args.logdir, args.id)
 
@@ -398,6 +406,9 @@ def main():
     if args.use_abstract_bev_semantic:
         config.num_bev_semantic_classes = 12
         config.bev_semantic_weights = [1 for _ in range(config.num_bev_semantic_classes)]
+
+    if not bool(config.predict_speed):
+        config.target_speed_weights = [1.0, 1.0, 1.0]
 
     config.debug = int(os.environ.get('DEBUG_CHALLENGE', 0))
     # Before normalizing we need to set the losses we don't use to 0
@@ -590,7 +601,7 @@ def main():
 
     # Create logdir
     now = datetime.datetime.now()
-    current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
+    current_time = now.strftime("%d_%m_%Y_%H_%M_%S")
     args.logdir += "_" + current_time
     if rank == 0:
         print('Created dir:', args.logdir, rank)
@@ -743,7 +754,7 @@ class Engine(object):
         target_point = None
         command = None
         ego_vel = None
-        target_speed = None
+        target_speed_acceleration = None
         checkpoint_label = None
 
         if self.config.use_flow:
@@ -785,7 +796,10 @@ class Engine(object):
             command = None
             ego_vel = data["input_speed"].to(self.device, dtype=torch.float32)
             ego_vel = ego_vel[:, None]
-            target_speed = data["target_speed"].to(self.device, dtype=torch.float32)
+            if self.config.predict_speed:
+                target_speed_acceleration = data["target_speed"].to(self.device, dtype=torch.float32)
+            else:
+                target_speed_acceleration = data["acceleration"].to(self.device, dtype=torch.float32)
             checkpoint_label = data["waypoints"].to(self.device, dtype=torch.float32)
             if checkpoint_label.shape[2] == 3:
                 checkpoint_label = checkpoint_label[:, :, :-1]
@@ -839,7 +853,7 @@ class Engine(object):
                               pred_flow=pred_flow,
                               pred_bounding_box=pred_bounding_box,
                               waypoint_label=ego_waypoint,
-                              target_speed_label=target_speed,
+                              target_speed_label=target_speed_acceleration,
                               checkpoint_label=checkpoint_label,
                               semantic_label=semantic_label,
                               bev_semantic_label=bev_semantic_label,
@@ -932,11 +946,15 @@ class Engine(object):
                 command = None
                 ego_vel = torch.tensor([data["input_speed"]]).to(self.device, dtype=torch.float32)
                 ego_vel = ego_vel[:, None]
-                target_speed = torch.from_numpy(data["target_speed"]).to(self.device, dtype=torch.float32)
+                if self.config.predict_speed:
+                    target_speed_acceleration = torch.tensor(data["target_speed"]).to(self.device, dtype=torch.float32)
+                else:
+                    target_speed_acceleration = torch.tensor(data["acceleration"]).to(self.device, dtype=torch.float32)
                 checkpoint_label = torch.from_numpy(data["waypoints"]).to(self.device, dtype=torch.float32)
                 if checkpoint_label.shape[1] == 3:
                     checkpoint_label = checkpoint_label[:, :-1]
             else:
+                target_speed_acceleration = None
                 target_point = None
                 command = None
                 ego_vel = None
@@ -955,7 +973,7 @@ class Engine(object):
                 self.device, dtype=torch.float32)
 
             pred_wp, \
-                pred_target_speed, \
+                pred_target_speed_acceleration, \
                 pred_checkpoint, \
                 pred_semantic, \
                 pred_bev_semantic, \
@@ -1025,7 +1043,7 @@ class Engine(object):
                     pixel_weight_label, num_ob_bbs_label = \
                     utils.create_ground_truth(input_size=(nutfuser_config.BEV_IMAGE_W, nutfuser_config.BEV_IMAGE_H),
                                               num_classes=self.config.num_bb_classes,
-                                              batches_of_boxes=torch.tensor([data["bounding_boxes"]]),
+                                              batches_of_boxes=torch.tensor(data["bounding_boxes"])[None, :],
                                               )
                 heatmap_label = heatmap_label.permute(0, 3, 1, 2)
                 boxes_comparison[:heatmap_pred.shape[2], heatmap_pred.shape[3]:] = heatmap_label[0, 0, :, :] * 255
@@ -1046,15 +1064,28 @@ class Engine(object):
                         int(128 - pred_checkpoint[0, i, 0] * 256 / nutfuser_config.BEV_SQUARE_SIDE_IN_M),
                         int(128 - pred_checkpoint[0, i, 1] * 256 / nutfuser_config.BEV_SQUARE_SIDE_IN_M)),
                                                   3, (0, 0, 255), -1)
-                list_target_speed = [float(el) for el in target_speed]
-                list_predicted_speed = [float(el) for el in torch.nn.functional.softmax(pred_target_speed[0])]
+                list_target_speed_acceleration = [float(el) for el in target_speed_acceleration]
+                list_predicted_speed_acceleration =\
+                    [float(el) for el in torch.nn.functional.softmax(pred_target_speed_acceleration[0])]
+
+                if self.config.predict_speed:
+                    string_target_speed_acceleration = "SPEED: "
+                    string_predicted_speed_acceleration = "SPEED: "
+                else:
+                    string_target_speed_acceleration = "ACC: "
+                    string_predicted_speed_acceleration = "ACC: "
+                for el in list_target_speed_acceleration:
+                    string_target_speed_acceleration += f"{el:.2f}, "
+
+                for el in list_predicted_speed_acceleration:
+                    string_predicted_speed_acceleration += f"{el:.2f}, "
                 cv2.putText(rgb_ground_truth,
-                            f"{list_target_speed[0]:.2f}, {list_target_speed[1]:.2f}, {list_target_speed[2]:.2f}, {list_target_speed[3]:.2f}",
-                            (0, 128 + 60), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0, 255, 0), thickness=2,
+                            string_target_speed_acceleration,
+                            (0, 128 + 60), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.4, color=(0, 255, 0), thickness=2,
                             lineType=cv2.LINE_AA)
                 cv2.putText(rgb_ground_truth,
-                            f"{list_predicted_speed[0]:.2f}, {list_predicted_speed[1]:.2f}, {list_predicted_speed[2]:.2f}, {list_predicted_speed[3]:.2f}",
-                            (0, 128 + 90), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.6, color=(0, 0, 255), thickness=2,
+                            string_predicted_speed_acceleration,
+                            (0, 128 + 90), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.4, color=(0, 0, 255), thickness=2,
                             lineType=cv2.LINE_AA)
 
             if self.config.use_bev_semantic:

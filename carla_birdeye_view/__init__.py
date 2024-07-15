@@ -292,10 +292,15 @@ class BirdViewProducer:
         # Let's create the Bounding Boxes around Cars and Walkers
         actor_sum = []
 
+        parked_vehicles = self._world.get_environment_objects(carla.CityObjectLabel.Car) + \
+                          self._world.get_environment_objects(carla.CityObjectLabel.Motorcycle)
         for el in segregated_actors.vehicles:
+            actor_sum.append((el, 1))
+        for el in parked_vehicles:
             actor_sum.append((el, 1))
         for el in segregated_actors.pedestrians:
             actor_sum.append((el, 0))
+
         bbs = []
 
         center = agent_vehicle.get_transform().transform(carla.Location(x=0, y=0))
@@ -303,9 +308,15 @@ class BirdViewProducer:
         yaw_agent = - math.atan2(rotation_test.x - center.x, rotation_test.y - center.y) + math.pi / 2
 
         for actor, label in actor_sum:
-            center = actor.get_transform().transform(carla.Location(x=0, y=0))
-            rotation_test = actor.get_transform().transform(carla.Location(x=1, y=0))
-            yaw = - math.atan2(rotation_test.x - center.x, rotation_test.y - center.y) + math.pi / 2 - yaw_agent
+            if isinstance(actor, carla.Actor):
+                transform = actor.get_transform()
+            elif isinstance(actor, carla.EnvironmentObject):
+                transform = actor.transform
+            else:
+                raise Exception("No idea about this type!")
+            center = transform.transform(carla.Location(x=0, y=0))
+            rotation_test = transform.transform(carla.Location(x=1, y=0))
+            yaw = - math.atan2(rotation_test.y - center.y, rotation_test.x - center.x) + yaw_agent
 
             if (math.sqrt(
                     (center.x - agent_vehicle_loc.x)**2 +

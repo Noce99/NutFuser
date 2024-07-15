@@ -693,7 +693,7 @@ def take_data_backbone(carla_egg_path, town_id, rpc_port, job_id, ego_vehicle_fo
     # CALCULATING ACCELERATION AS PROBABILITY
     acceleration_as_probability = [0., 0., 0.]  # DECREASING, SAME, INCREASING SPEED
     speed_difference = starting_next_speed - previous_speeds[0]
-    if abs(speed_difference) < 0.1:  # IT'S A RANDOM NUMBER
+    if abs(speed_difference) < config.MINIMUM_SPEED_DIFFERENCE_TO_PUT_ACCELERATION_TO_0:
         acceleration_as_probability[1] = 1.0
     elif speed_difference < 0.:
         acceleration_as_probability[0] = 1.0

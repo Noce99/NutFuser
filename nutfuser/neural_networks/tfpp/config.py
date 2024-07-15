@@ -536,6 +536,8 @@ class GlobalConfig:
         self.forcast_time = 0.5  # Number of seconds we forcast into the future
 
         self.use_abstract_bev_semantic = False
+        self.predict_speed = True
+        self.predict_acceleration = False
 
     def initialize(self, root_dir='', setting='all', **kwargs):
         for k, v in kwargs.items():

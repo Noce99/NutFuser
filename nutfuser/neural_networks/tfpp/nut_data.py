@@ -38,6 +38,7 @@ class backbone_dataset(Dataset):
         self.waypoints = {}
         self.previous_speeds = {}
         self.next_speeds = {}
+        self.acceleration = {}
 
         self.total_number_of_frames = self.check_dataset_and_get_data_folders()
         self.bytes_per_frame = self.get_one_frame_memory_size()
@@ -182,6 +183,7 @@ class backbone_dataset(Dataset):
             waypoints_path = str(os.path.join(self.dataset_path, data_folder.path, "frame_waypoints.npy"))
             previous_speeds_path = str(os.path.join(self.dataset_path, data_folder.path, "previous_speeds.npy"))
             next_speeds_path = str(os.path.join(self.dataset_path, data_folder.path, "next_speeds.npy"))
+            acceleration_path = str(os.path.join(self.dataset_path, data_folder.path, "accelerations.npy"))
 
             self.target_points[data_folder.path] = np.load(target_points_path)
             self.ram_that_I_will_use_in_bytes += (self.target_points[data_folder.path].size *
@@ -195,6 +197,9 @@ class backbone_dataset(Dataset):
             self.next_speeds[data_folder.path] = np.load(next_speeds_path)
             self.ram_that_I_will_use_in_bytes += (self.next_speeds[data_folder.path].size *
                                                   self.next_speeds[data_folder.path].itemsize)
+            self.acceleration[data_folder.path] = np.load(acceleration_path)
+            self.ram_that_I_will_use_in_bytes += (self.acceleration[data_folder.path].size *
+                                                  self.acceleration[data_folder.path].itemsize)
 
     def __len__(self):
         return self.total_number_of_frames
@@ -221,6 +226,7 @@ class backbone_dataset(Dataset):
         data["target_speed"] = self.next_speeds[self.data_path[idx]][id]
         data["waypoints"] = self.waypoints[self.data_path[idx]][id]
         data["targetpoint"] = self.target_points[self.data_path[idx]][id]
+        data["acceleration"] = self.acceleration[self.data_path[idx]][id]
 
         return data
 

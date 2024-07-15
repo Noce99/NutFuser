@@ -43,7 +43,7 @@ def get_arguments():
         type=int
     )
     argparser.add_argument(
-        '--train_flow',
+        '--use_flow',
         help='If set we train also Optical Flow! (default: False)',
         action='store_true'
     )
@@ -54,6 +54,14 @@ def get_arguments():
         required=False,
         type=str
     )
+    argparser.add_argument(
+        "--experiment_name",
+        help="Name of the experiment (it will be written in the log folder)! (default: experiment)",
+        default="experiment",
+        required=False,
+        type=str
+    )
+
     argparser.add_argument(
         '--epoch',
         help='Epoch at witch we continue the training! (default: 0 -> new training)',
@@ -91,6 +99,16 @@ def get_arguments():
         help='Use just a single GPU! (default: False)',
         action='store_true'
     )
+    argparser.add_argument(
+        '--do_not_predict_speed',
+        help='If the model DO NOT predict speed! (default: Predicting)',
+        action='store_true'
+    )
+    argparser.add_argument(
+        '--do_not_predict_acceleration',
+        help='If the model DO NOT predict acceleration! (default: Predicting)',
+        action='store_true'
+    )
     args = argparser.parse_args()
     # THERE I CHECK THE ARGUMENTS
     if args.dataset_validation is None:
@@ -116,7 +134,7 @@ def get_arguments():
     if args.weights_path is not None and not os.path.isfile(args.weights_path):
         raise utils.NutException(utils.color_error_string(
             f"The file '{args.weights_path}' does not exist!"))
-    # THERE I PROPERLY CHECK THAT THE DATASETFOLDERS ARE WELL BUILTED
+    # THERE I PROPERLY CHECK THAT THE DATASET FOLDERS ARE WELL BUILT
     for folder in tqdm(os.listdir(args.dataset_train)):
         folder_path = os.path.join(args.dataset_train, folder)
         if os.path.isdir(folder_path):
@@ -127,10 +145,15 @@ def get_arguments():
             folder_path = os.path.join(args.dataset_validation, folder)
             if os.path.isdir(folder_path):
                 utils.check_dataset_folder(folder_path)
-    if args.train_flow:
-        args.train_flow = 1
+    if args.use_flow:
+        args.use_flow = 1
     else:
-        args.train_flow = 0
+        args.use_flow = 0
+    if args.do_not_predict_speed and args.do_not_predict_acceleration:
+        raise utils.NutException("You need to predict at least one from speed and acceleration!")
+    if not args.do_not_predict_speed and not args.do_not_predict_acceleration:
+        print(utils.color_info_string("WARNING! I will predict speed also if both speed and acceleration"
+                                      " are set to True! (I will ignore acceleration)"))
     return args
 
 
@@ -153,7 +176,7 @@ if __name__ == "__main__":
         os.mkdir(train_logs_folder)
 
     now = datetime.datetime.now()
-    current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
+    current_time = now.strftime("%d_%m_%Y_%H_%M_%S")
     if not os.path.isdir(os.path.join(train_logs_folder, "nvidia_log")):
         os.mkdir(os.path.join(train_logs_folder, "nvidia_log"))
     nvidia_log = os.path.join(train_logs_folder, "nvidia_log", f"{current_time}")
@@ -201,6 +224,16 @@ if __name__ == "__main__":
     else:
         use_bounding_boxes = 0
 
+    if args.do_not_predict_speed:
+        predict_speed = 0
+    else:
+        predict_speed = 1
+
+    if args.do_not_predict_acceleration:
+        predict_acceleration = 0
+    else:
+        predict_acceleration = 1
+
     with open(output_log, 'w') as logs_file:
         train_process = subprocess.Popen(
             [shell_train_path,
@@ -210,7 +243,7 @@ if __name__ == "__main__":
              f"{args.dataset_validation}",
              f"{train_logs_folder}",
              f"{args.batch_size}",
-             f"{args.train_flow}",
+             f"{args.use_flow}",
              f"{num_of_gpu}",
              f"{args.weights_path}",
              f"{args.epoch}",
@@ -219,7 +252,10 @@ if __name__ == "__main__":
              f"{use_semantic}",
              f"{use_depth}",
              f"{use_bev_semantic}",
-             f"{use_bounding_boxes}"],
+             f"{use_bounding_boxes}",
+             f"{predict_speed}",
+             f"{predict_acceleration}",
+             f"{args.experiment_name}"],
             universal_newlines=True,
             stdout=logs_file,
             stderr=logs_file,
