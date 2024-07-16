@@ -970,7 +970,10 @@ def draw_bounding_boxes(image, boxes, thickness=2):
 
 
 def save_bbs_in_json(path, bbs):
-    bbs += [[-1000, -1000, 0, 0, 0, 0] for _ in range(config.NUM_OF_BBS_PER_FRAME-len(bbs))]
+    if len(bbs) > config.NUM_OF_BBS_PER_FRAME:
+        bbs = bbs[:config.NUM_OF_BBS_PER_FRAME]
+    else:
+        bbs += [[-1000, -1000, 0, 0, 0, 0] for _ in range(config.NUM_OF_BBS_PER_FRAME-len(bbs))]
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(bbs, f, ensure_ascii=False, indent=4)
 
