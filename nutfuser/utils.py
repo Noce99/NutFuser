@@ -15,8 +15,10 @@ from types import ModuleType
 
 from nutfuser.raft_flow_colormap import flow_to_image
 import nutfuser.config as config
-from nutfuser.neural_networks.tfpp_config import GlobalConfig
-from nutfuser.neural_networks.model import LidarCenterNet
+from nutfuser.neural_networks.tfpp.config import GlobalConfig
+from nutfuser.neural_networks.tfpp.model import LidarCenterNet
+from carla_birdeye_view.colors import RGB
+from carla_birdeye_view import RGB_BY_MASK, BirdViewMasks
 
 
 def color_error_string(string):
@@ -631,6 +633,7 @@ def load_model_given_weights(weights_path):
     predicting_flow = None
     just_a_backbone = None
     tfpp_original = None
+    abstract_semantic = None
     if "flow_decoder.deconv1.0.weight" in weights.keys():
         # Predicting also flow
         a_config_file.use_flow = True
@@ -664,10 +667,19 @@ def load_model_given_weights(weights_path):
         else:
             a_config_file.use_discrete_command = False
             tfpp_original = False
+    if weights["bev_semantic_decoder.2.weight"].shape[0] == 12:
+        a_config_file.use_abstract_bev_semantic = True
+        a_config_file.num_bev_semantic_classes = 12
+        a_config_file.bev_semantic_weights = [1 for _ in range(a_config_file.num_bev_semantic_classes)]
+        abstract_semantic = True
+    else:
+        a_config_file.use_abstract_bev_semantic = False
+        abstract_semantic = False
 
     print(f"PREDICT FLOW:\t\t{predicting_flow}")
     print(f"JUST A BACKBONE:\t{just_a_backbone}")
     print(f"ORIGINAL TFPP:\t\t{tfpp_original}")
+    print(f"ABSTRACT BEV SEMANTIC:\t{abstract_semantic}")
 
     if tfpp_original:
         raise NutException(color_error_string(f"You have given me original tfpp weights but I cannot deal with them!"))
@@ -679,6 +691,8 @@ def load_model_given_weights(weights_path):
     try:
         model.load_state_dict(weights, strict=False)
     except Exception as e:
+        print(e)
+        print("@"*200)
         raise NutException(color_error_string(f"Weight in '{weights_path}' not compatible with the model!"))
 
     return model, predicting_flow, just_a_backbone, tfpp_original
@@ -976,6 +990,31 @@ def save_bbs_in_json(path, bbs):
         bbs += [[-1000, -1000, 0, 0, 0, 0] for _ in range(config.NUM_OF_BBS_PER_FRAME-len(bbs))]
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(bbs, f, ensure_ascii=False, indent=4)
+
+
+def set_image_pixel_color(image, value, color):
+    image[:, :, 0][image[:, :, 0] == value] = color[0]
+    image[:, :, 1][image[:, :, 1] == value] = color[1]
+    image[:, :, 2][image[:, :, 2] == value] = color[2]
+    return image
+
+
+def color_semantic(my_image):
+    my_image = set_image_pixel_color(my_image, 0, (0, 0, 0))  # UNKNOWN
+    my_image = set_image_pixel_color(my_image, 1, RGB.DIM_GRAY)  # ROAD
+    my_image = set_image_pixel_color(my_image, 2, RGB.CHAMELEON)  # TERRAIN WHERE THE CAR SHOULD NOT GO
+    my_image = set_image_pixel_color(my_image, 3, RGB.WHITE)  # LINES
+    my_image = set_image_pixel_color(my_image, 4, RGB.ORANGE)  # VEHICLES
+    my_image = set_image_pixel_color(my_image, 5, RGB.VIOLET)  # PEDESTRIANS
+    my_image = set_image_pixel_color(my_image, 6, RGB.RED)  # SIGN
+    my_image = set_image_pixel_color(my_image, 7, RGB.GREEN)  # TRAFFIC LIGHT
+    return my_image
+
+
+def color_semantic_2(my_image):
+    for i in range(10):
+        my_image = set_image_pixel_colo(my_image, BirdViewMasks(i), RGB_BY_MASK[BirdViewMasks(i)])
+    return my_image
 
 
 if __name__ == "__main__":

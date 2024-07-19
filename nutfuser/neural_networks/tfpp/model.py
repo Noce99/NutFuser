@@ -1,6 +1,9 @@
 """
 The main model structure
 """
+import sys
+sys.path.append("/home/enrico/Projects/Carla/NutFuser/nutfuser/neural_networks/tfpp/")
+sys.path.append("/leonardo_scratch/fast/IscrC_ADC/NutFuser/nutfuser/neural_networks/tfpp/")
 import transfuser_utils as t_u
 from focal_loss import FocalLoss
 import numpy as np

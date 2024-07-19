@@ -73,11 +73,47 @@ def print_betavariate():
     import matplotlib.pyplot as plt
     elements = []
     for i in range(100000):
-        elements.append(random.uniform(-90, 90))  # random.betavariate(alpha=2, beta=2) * 100)
-    x, y = put_elements_in_bins(elements, 20, min(elements), max(elements))
-    plt.scatter(x, y)
+        elements.append(
+            # random.uniform(-90, 90)
+            random.betavariate(alpha=2, beta=2) * 100
+        )
+    x, y = put_elements_in_bins(elements, 200, min(elements), max(elements))
+    plt.plot(x, y)
+    plt.show()
+
+
+def betavariate(alpha, beta, x):
+    import math
+    return math.gamma(alpha+beta)/(math.gamma(alpha)*math.gamma(beta)) * math.pow(x, alpha-1) * math.pow(1-x, beta-1)
+
+
+def show_betavariate_distribution():
+    num_of_total_points = 1000
+    xs = [1/num_of_total_points * i for i in range(num_of_total_points)]
+    ys_cloudiness = []
+    ys_precipitation = []
+    ys_wind = []
+    ys_fog = []
+    ys_sun = [1 for i in range(num_of_total_points)]
+    for x in xs:
+        ys_cloudiness.append(betavariate(1, 4, x))
+        ys_precipitation.append(betavariate(1.5, 5, x))
+        ys_wind.append(betavariate(2, 2, x))
+        ys_fog.append(betavariate(1, 4, x))
+
+    import matplotlib.pyplot as plt
+    plt.plot(xs, ys_cloudiness, label="Cloudiness")
+    plt.plot(xs, ys_precipitation, label="Precipitation")
+    plt.plot(xs, ys_wind, label="Wind")
+    plt.plot(xs, ys_fog, label="Fog")
+    # plt.plot(xs, ys_sun, label="Sun Angle")
+    plt.legend(loc="upper right")
+    plt.ylabel("PDF")
+    plt.xlabel("x")
+    # plt.title("Probability Density Function for Different Weather Parameters")
     plt.show()
 
 
 if __name__ == "__main__":
-    print_betavariate()
+    # print_betavariate()
+    show_betavariate_distribution()
