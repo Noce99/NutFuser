@@ -69,6 +69,13 @@ def get_arguments():
         type=str
     )
     argparser.add_argument(
+        '--name',
+        help="Give a name to the evaluation!",
+        default="noname",
+        required=False,
+        type=str
+    )
+    argparser.add_argument(
         '--wait_carla_for',
         help='How many seconds wait for Carla! (default: 10)',
         required=False,
@@ -198,12 +205,13 @@ if __name__ == "__main__":
     a_table = []
     now = datetime.now()
     current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
-    os.mkdir(os.path.join(args.where_to_save, f"EVAL_{current_time}"))
+    folder_name = f"EVAL_{args.name}_{current_time}"
+    os.mkdir(os.path.join(args.where_to_save, folder_name))
     for element in evaluation_routes_folders:
-        os.mkdir(os.path.join(args.where_to_save, f"EVAL_{current_time}", element))
+        os.mkdir(os.path.join(args.where_to_save, folder_name, element))
         evaluation_worklist.append({"route_path": os.path.join(args.evaluation_routes, element, "evaluation.xml"),
                                     "weights_path": args.weight_path,
-                                    "where_to_save": os.path.join(args.where_to_save, f"EVAL_{current_time}", element)})
+                                    "where_to_save": os.path.join(args.where_to_save, folder_name, element)})
         a_table.append([element, args.weight_path])
     print(tabulate(a_table, headers=a_table_head, tablefmt="grid"))
 
