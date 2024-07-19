@@ -9,7 +9,7 @@ from ctypes import c_int
 from tabulate import tabulate
 import sys
 
-sys.path.append("/leonardo_scratch/fast/IscrC_ADC/CARLA_0_9_15/PythonAPI/carla/agents/")
+sys.path.append("/leonardo_scratch/fast/IscrC_ADC/CARLA_0_9_15/PythonAPI/carla/")
 
 
 from nutfuser.data_creation import take_data_without_records, take_data_just_position_for_evaluation
