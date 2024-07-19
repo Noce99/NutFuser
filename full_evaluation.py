@@ -77,6 +77,12 @@ def get_arguments():
         help=f'If you want to see the images of the car moving',
         action='store_true'
     )
+    argparser.add_argument(
+        '--weight_path',
+        help=f'Path to the weights',
+        required=True,
+        type=str
+    )
     args = argparser.parse_args()
     return args
 
@@ -185,7 +191,7 @@ if __name__ == "__main__":
     # (2-3) LET'S CREATE A LIST OF EVALUATIONS TO DO & LET'S CREATE THE OUTPUT FOLDERS
     evaluation_worklist = []
     evaluation_routes_folders = os.listdir(args.evaluation_routes)
-    a_table_head = ["Evaluation Route", "Flow?"]
+    a_table_head = ["Evaluation Route", "Weights"]
     a_table = []
     now = datetime.now()
     current_time = now.strftime("%d_%m_%Y_%H:%M:%S")
@@ -193,15 +199,9 @@ if __name__ == "__main__":
     for element in evaluation_routes_folders:
         os.mkdir(os.path.join(args.where_to_save, f"EVAL_{current_time}", element))
         evaluation_worklist.append({"route_path": os.path.join(args.evaluation_routes, element, "evaluation.xml"),
-                                    "weights_path":
-                                        "/home/enrico/Projects/Carla/NutFuser/train_logs/NET7/model_0030.pth",
+                                    "weights_path": args.weight_path,
                                     "where_to_save": os.path.join(args.where_to_save, f"EVAL_{current_time}", element)})
-        evaluation_worklist.append({"route_path": os.path.join(args.evaluation_routes, element, "evaluation.xml"),
-                                    "weights_path":
-                                        "/home/enrico/Projects/Carla/NutFuser/train_logs/NET8/model_0030.pth",
-                                    "where_to_save": os.path.join(args.where_to_save, f"EVAL_{current_time}", element)})
-        a_table.append([element, True])
-        a_table.append([element, False])
+        a_table.append([element, args.weight_path])
     print(tabulate(a_table, headers=a_table_head, tablefmt="grid"))
 
     # (4) LET'S RUN THE EVALUATION
