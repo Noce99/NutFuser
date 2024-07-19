@@ -15,9 +15,10 @@ from nutfuser import config
 from datetime import datetime
 
 sys.path.append(os.path.join(pathlib.Path(__file__).parent.resolve(), "scenario_runner"))
-from nutfuser.carla_interface.run_carla import  check_integrity_of_carla_path, \
-                                                launch_carla_server_saifly_and_wait_till_its_up, \
-                                                launch_scenario_runner_saifly_and_wait_till_its_up
+from nutfuser.carla_interface.run_carla import check_integrity_of_carla_path, \
+    launch_carla_server_saifly_and_wait_till_its_up, \
+    launch_scenario_runner_saifly_and_wait_till_its_up
+
 
 def get_arguments():
     argparser = argparse.ArgumentParser(description=__doc__)
@@ -79,6 +80,7 @@ def get_arguments():
     args = argparser.parse_args()
     return args
 
+
 def kill_all(carla_server_pid, evaluation_pid):
     try:
         os.kill(carla_server_pid, signal.SIGKILL)
@@ -89,7 +91,9 @@ def kill_all(carla_server_pid, evaluation_pid):
     except:
         pass
 
+
 pids_to_be_killed = []
+
 
 def run_all(args, route_path, weights_path, output_dir_path):
     # (1) LAUNCH CARLA SERVER
@@ -97,39 +101,40 @@ def run_all(args, route_path, weights_path, output_dir_path):
     os.environ["PATH"] = f"{os.environ['PATH']}:/leonardo/home/userexternal/emannocc/xdg-user-dirs-0.18/"
     carla_server_pid = multiprocessing.Value(c_int)
     carla_was_correctly_started_up = launch_carla_server_saifly_and_wait_till_its_up(
-            rpc_port=args.rpc_port,
-            carla_server_pid=carla_server_pid,
-            carlaUE4_path=carlaUE4_path,
-            logs_path=carla_log_path,
-            how_many_seconds_to_wait=args.wait_carla_for
-        )
+        rpc_port=args.rpc_port,
+        carla_server_pid=carla_server_pid,
+        carlaUE4_path=carlaUE4_path,
+        logs_path=carla_log_path,
+        how_many_seconds_to_wait=args.wait_carla_for
+    )
 
     pids_to_be_killed.append(carla_server_pid.value)
 
     if not carla_was_correctly_started_up:
         raise utils.NutException(utils.color_error_string(f"Carla crashed while starting!"))
-    
+
     print(utils.color_info_string("(1/3)\tCarla Server is UP!"))
 
     # (2) LAUNCH SCENARIO RUNNER
     print("Launching Scenario Runner...")
-    agent_path = os.path.join(pathlib.Path(__file__).parent.resolve(), "scenario_runner", "srunner", "autoagents", "nutfuser_autonomous_agent.py")
-    args_list = ["--route",         route_path,
-                 "--agent",         agent_path,
-                 "--timeout",       "30",
-                 "--agentConfig",   weights_path,
+    agent_path = os.path.join(pathlib.Path(__file__).parent.resolve(), "scenario_runner", "srunner", "autoagents",
+                              "nutfuser_autonomous_agent.py")
+    args_list = ["--route", route_path,
+                 "--agent", agent_path,
+                 "--timeout", "30",
+                 "--agentConfig", weights_path,
                  "--json",
-                 "--outputDir",     output_dir_path]
+                 "--outputDir", output_dir_path]
     if args.show_images:
         args_list.append("--show_images")
     scenario_runner_pid = multiprocessing.Value(c_int)
     scenario_runner_is_done = multiprocessing.Event()
     carla_is_ok, scenario_runner_is_ok, launch_scenario_runner_process = launch_scenario_runner_saifly_and_wait_till_its_up(
-            scenario_runner_pid=scenario_runner_pid,
-            carla_server_pid=carla_server_pid,
-            args_list=args_list,
-            scenario_runner_is_done=scenario_runner_is_done
-        )
+        scenario_runner_pid=scenario_runner_pid,
+        carla_server_pid=carla_server_pid,
+        args_list=args_list,
+        scenario_runner_is_done=scenario_runner_is_done
+    )
 
     pids_to_be_killed.append(scenario_runner_pid.value)
 
@@ -137,9 +142,9 @@ def run_all(args, route_path, weights_path, output_dir_path):
         raise utils.NutException(utils.color_error_string(f"Carla crashed while setting up Scenario Runner!"))
     if not scenario_runner_is_ok:
         raise utils.NutException(utils.color_error_string(f"Scenario Runner Crashed!"))
-    
+
     print(utils.color_info_string("(2/3)\tScenario Runner is UP!"))
-    
+
     while True:
         if not psutil.pid_exists(carla_server_pid.value):
             raise utils.NutException(utils.color_error_string(f"Carla crashed!"))
@@ -152,6 +157,7 @@ def run_all(args, route_path, weights_path, output_dir_path):
     print(utils.color_info_success(f"Scenario Runner Finished!"))
     kill_all(carla_server_pid.value, scenario_runner_pid.value)
     return True
+
 
 if __name__ == "__main__":
     args = get_arguments()
@@ -186,26 +192,28 @@ if __name__ == "__main__":
     os.mkdir(os.path.join(args.where_to_save, f"EVAL_{current_time}"))
     for element in evaluation_routes_folders:
         os.mkdir(os.path.join(args.where_to_save, f"EVAL_{current_time}", element))
-        evaluation_worklist.append({"route_path":os.path.join(args.evaluation_routes, element, "evaluation.xml"),
-                                    "weights_path":"/home/enrico/Projects/Carla/NutFuser/train_logs/full_net_NO_flow/model_0030.pth",
-                                    "where_to_save":os.path.join(args.where_to_save, f"EVAL_{current_time}", element)})
-        evaluation_worklist.append({"route_path":os.path.join(args.evaluation_routes, element, "evaluation.xml"),
-                                    "weights_path":"/home/enrico/Projects/Carla/NutFuser/train_logs/full_net_flow/model_0030.pth",
-                                    "where_to_save":os.path.join(args.where_to_save, f"EVAL_{current_time}", element)})
+        evaluation_worklist.append({"route_path": os.path.join(args.evaluation_routes, element, "evaluation.xml"),
+                                    "weights_path":
+                                        "/home/enrico/Projects/Carla/NutFuser/train_logs/NET7/model_0030.pth",
+                                    "where_to_save": os.path.join(args.where_to_save, f"EVAL_{current_time}", element)})
+        evaluation_worklist.append({"route_path": os.path.join(args.evaluation_routes, element, "evaluation.xml"),
+                                    "weights_path":
+                                        "/home/enrico/Projects/Carla/NutFuser/train_logs/NET8/model_0030.pth",
+                                    "where_to_save": os.path.join(args.where_to_save, f"EVAL_{current_time}", element)})
         a_table.append([element, True])
         a_table.append([element, False])
     print(tabulate(a_table, headers=a_table_head, tablefmt="grid"))
 
     # (4) LET'S RUN THE EVALUATION
     for k, element in enumerate(evaluation_worklist):
-        to_print = f"# Evaluation n. {k+1}/{len(evaluation_worklist)} #"
-        print(utils.color_info_string("#"*len(to_print)))
+        to_print = f"# Evaluation n. {k + 1}/{len(evaluation_worklist)} #"
+        print(utils.color_info_string("#" * len(to_print)))
         print(utils.color_info_string(to_print))
-        print(utils.color_info_string("#"*len(to_print)))
+        print(utils.color_info_string("#" * len(to_print)))
         # LET'S RUN ALL
         for i in range(config.MAX_NUM_OF_ATTEMPTS):
             try:
-                print(utils.get_a_title(f"ATTEMPT [{i+1}/{config.MAX_NUM_OF_ATTEMPTS}]", "blue"))
+                print(utils.get_a_title(f"ATTEMPT [{i + 1}/{config.MAX_NUM_OF_ATTEMPTS}]", "blue"))
                 if run_all(args,
                            route_path=element["route_path"],
                            weights_path=element["weights_path"],
@@ -227,5 +235,3 @@ if __name__ == "__main__":
                     except:
                         pass
                 exit()
-
-    
