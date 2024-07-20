@@ -140,7 +140,9 @@ def run_all(args, route_path, weights_path, output_dir_path):
                  "--timeout", "300",
                  "--agentConfig", weights_path,
                  "--json",
-                 "--outputDir", output_dir_path]
+                 "--outputDir", output_dir_path,
+                 "--port", args.rpc_port,
+                 "--trafficManagerPort", args.tm_port]
     if args.show_images:
         args_list.append("--show_images")
     scenario_runner_pid = multiprocessing.Value(c_int)
