@@ -137,7 +137,7 @@ def run_all(args, route_path, weights_path, output_dir_path):
                               "nutfuser_autonomous_agent.py")
     args_list = ["--route", route_path,
                  "--agent", agent_path,
-                 "--timeout", "30",
+                 "--timeout", "300",
                  "--agentConfig", weights_path,
                  "--json",
                  "--outputDir", output_dir_path]
