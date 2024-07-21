@@ -165,8 +165,8 @@ if __name__ == "__main__":
 
 # print info about current job
 
-PORT={2000+i}
-TM_PORT={5000+i}
+PORT={33000+i*3}
+TM_PORT={43000+i*3}
 JOB_ID={i}
 
 dt=$(date '+%d/%m/%Y %H:%M:%S');
