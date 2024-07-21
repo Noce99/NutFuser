@@ -174,7 +174,7 @@ echo "Evaluation JOB STARTED: $dt"
 
 cd {NUTFUSER}
 source bin/activate
-python single_evaluation.py --evaluation_route {job['scenario_path']} --where_to_save {job['save_path']} --carla_path {CARLA_PATH} --weight_path {job['weight_path']} --id {i} --completed_path {job['completed_path']}
+python single_evaluation.py --evaluation_route {job['scenario_path']} --where_to_save {job['save_path']} --carla_path {CARLA_PATH} --weight_path {job['weight_path']} --id {i} --completed_path {job['completed_path']} --rpc_port $PORT --tm_port $TM_PORT
 """)
 
     with open(os.path.join(script_and_jobs_path, "launch_all_jobs.sh"), "w") as file:
