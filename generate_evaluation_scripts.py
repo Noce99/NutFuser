@@ -185,5 +185,5 @@ cd {os.path.join(script_and_jobs_path, "jobs")}
 
 """)
         for i, job in enumerate(jobs):
-            file.write(f"sbatch job_{i}.sh\n")
+            file.write(f"sbatch {i}.sbatch\n")
         file.write("cd ..")
