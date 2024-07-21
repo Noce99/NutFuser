@@ -159,7 +159,7 @@ if __name__ == "__main__":
 #SBATCH --mail-user=enrico.mannocci3@unibo.it
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --time=24:00:00
+#SBATCH --time=01:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --account={account_name}
 
