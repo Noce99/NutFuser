@@ -51,7 +51,7 @@ if __name__ == "__main__":
             if file[:5] == "model":
                 networks_weights.append(os.path.join(NUTFUSER, "train_logs", folder, file))
     with open(os.path.join(script_and_jobs_path, 'weight_list.json'), 'w') as f:
-        json.dump(networks_weights, f)
+        json.dump(networks_weights, f, sort_keys=False, indent=4)
     print(f"Found out {len(networks_weights)} networks to evaluate!")
 
     # ASKING NETWORKS TO EVALUATE
@@ -68,6 +68,10 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print(utils.color_info_string("Bye!"))
             exit()
+
+    with open(os.path.join(script_and_jobs_path, 'weight_list.json'), 'r') as f:
+        networks_weights = json.load(f)
+    print(f"After your modification found out {len(networks_weights)} networks to evaluate!")
 
     # ASK CARLA FOLDER
     done = False
