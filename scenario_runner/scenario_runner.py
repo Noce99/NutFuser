@@ -23,6 +23,7 @@ os.environ["SCENARIO_RUNNER_ROOT"] = "/home/enrico/Projects/Carla/NutFuser/scena
 sys.path.append(f"{os.environ['CARLA_ROOT']}/PythonAPI/carla/dist/carla-0.9.15-py3.7-linux-x86_64.egg")
 sys.path.append(f"{os.environ['CARLA_ROOT']}/PythonAPI/carla")
 sys.path.append(f"{pathlib.Path(__file__).parent.resolve().parent.resolve()}")
+sys.path.append("/home/enrico/Progetti/Carla/PythonAPI/carla")
 
 import glob
 import traceback

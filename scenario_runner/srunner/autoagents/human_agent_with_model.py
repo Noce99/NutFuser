@@ -106,7 +106,7 @@ class HumanAgentWithModel(AutonomousAgent):
 
         # Let's load the Neural Network
         weight_path = path_to_conf_file
-        self.model, self.predicting_flow, self.just_a_backbone, self.tfpp_original = utils.load_model_given_weights(weight_path)
+        self.model, self.predicting_flow, self.just_a_backbone, self.tfpp_original, _ = utils.load_model_given_weights(weight_path)
         self.model.eval()
         # END NUT
 

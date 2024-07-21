@@ -3,6 +3,7 @@ The main model structure
 """
 import sys
 sys.path.append("/home/enrico/Projects/Carla/NutFuser/nutfuser/neural_networks/tfpp/")
+sys.path.append("/home/enrico/Progetti/NutFuser/nutfuser/neural_networks/tfpp/")
 sys.path.append("/leonardo_scratch/fast/IscrC_ADC/NutFuser/nutfuser/neural_networks/tfpp/")
 import transfuser_utils as t_u
 from focal_loss import FocalLoss
@@ -711,7 +712,7 @@ class LidarCenterNet(nn.Module):
 
         return steer, throttle, brake
 
-    def control_pid(self, waypoints, velocity):
+    def control_pid(self, waypoints, velocity, desired_speed=None):
         """
         Predicts vehicle control with a PID controller.
         Used for waypoint predictions
@@ -721,10 +722,13 @@ class LidarCenterNet(nn.Module):
 
         speed = velocity[0].data.cpu().numpy()
 
-        # m / s required to drive between waypoint 0.5 and 1.0 second in the future
-        one_second = int(self.config.carla_fps // (self.config.wp_dilation * self.config.data_save_freq))
-        half_second = one_second // 2
-        desired_speed = np.linalg.norm(waypoints[half_second - 1] - waypoints[one_second - 1]) * 2.0
+        if desired_speed is None:
+            # m / s required to drive between waypoint 0.5 and 1.0 second in the future
+            one_second = int(self.config.carla_fps // (self.config.wp_dilation * self.config.data_save_freq))
+            half_second = one_second // 2
+            desired_speed = np.linalg.norm(waypoints[half_second - 1] - waypoints[one_second - 1]) * 2.0
+
+        print(f"actual_speed = {speed}, desired_speed = {desired_speed}")
 
         if self.make_histogram:
             self.speed_histogram.append(desired_speed * 3.6)

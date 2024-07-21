@@ -44,7 +44,8 @@ class NutfuserAutonomousAgent(AutonomousAgent):
 
         # Let's load the Neural Network
         weight_path = path_to_conf_file
-        self.model, self.predicting_flow, self.just_a_backbone, self.tfpp_original = utils.load_model_given_weights(weight_path)
+        self.model, self.predicting_flow, self.just_a_backbone, self.tfpp_original, self.predict_speed =\
+            utils.load_model_given_weights(weight_path)
         self.model.eval()
 
         self.show_images = show_images
@@ -220,72 +221,84 @@ class NutfuserAutonomousAgent(AutonomousAgent):
         # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@
         # Get controls from model output
         pred_waypoints_for_pid = torch.flip(pred_waypoints, dims=(2, ))
-        steer, throttle, brake = self.model.control_pid(pred_waypoints_for_pid, speed_for_model)
 
         # There I create some rectangles in front of the car
         if self.show_images:
             lidar_bev_image = np.zeros((numpy_lidar_bev.shape[0], numpy_lidar_bev.shape[1], 3), np.float32)
-            lidar_bev_image[:, :, 0] = numpy_lidar_bev/255
-            lidar_bev_image[:, :, 1] = numpy_lidar_bev/255
-            lidar_bev_image[:, :, 2] = numpy_lidar_bev/255
+            lidar_bev_image[:, :, 0] = numpy_lidar_bev / 255
+            lidar_bev_image[:, :, 1] = numpy_lidar_bev / 255
+            lidar_bev_image[:, :, 2] = numpy_lidar_bev / 255
 
-        """
-        rectangle_top_left =        (   int(lidar_bev.shape[0]/2 - config.LIDAR_RECTANGLE_WIDTH/2),
-                                        int(lidar_bev.shape[1]/2 - config.LIDAR_RECTANGLE_HEIGHT))
-        rectangle_bottom_right =    (   int(lidar_bev.shape[0]/2 + config.LIDAR_RECTANGLE_WIDTH/2),
-                                        int(lidar_bev.shape[1]/2))
-
-        rectangle = lidar_bev[rectangle_top_left[1]:rectangle_bottom_right[1],
-                              rectangle_top_left[0]:rectangle_bottom_right[0]]
-
-        rectangle /= 255
-        ammount_of_obtacles_in_front = np.sum(rectangle > 0.5)
-        lidar_bev = cv2.rectangle(  lidar_bev,
-                                    rectangle_top_left,
-                                    rectangle_bottom_right,
-                                    255,
-                                    3)
-        """
         ammount_of_obtacles_in_front = 0
-        processed_pred_waypoints = utils.process_array_and_tensor(pred_waypoints, denormalize=False, data_dims=1, channels=2, dtype=np.float32, argmax=False)
+        processed_pred_waypoints = utils.process_array_and_tensor(pred_waypoints, denormalize=False, data_dims=1,
+                                                                  channels=2, dtype=np.float32, argmax=False)
         for i in range(processed_pred_waypoints.shape[0]):
             if math.isnan(processed_pred_waypoints[i, 0]) or math.isnan(processed_pred_waypoints[i, 1]):
                 continue
-            wp_x = int(128-processed_pred_waypoints[i, 0]*256/config.BEV_SQUARE_SIDE_IN_M)
-            wp_y = int(128-processed_pred_waypoints[i, 1]*256/config.BEV_SQUARE_SIDE_IN_M)
+            wp_x = int(128 - processed_pred_waypoints[i, 0] * 256 / config.BEV_SQUARE_SIDE_IN_M)
+            wp_y = int(128 - processed_pred_waypoints[i, 1] * 256 / config.BEV_SQUARE_SIDE_IN_M)
 
-            rectangle_top_left =        (   int(wp_x - 10),
-                                            int(wp_y - 10))
-            rectangle_bottom_right =    (   int(wp_x + 10),
-                                            int(wp_y + 10))
+            rectangle_top_left = (int(wp_x - 10),
+                                  int(wp_y - 10))
+            rectangle_bottom_right = (int(wp_x + 10),
+                                      int(wp_y + 10))
             if self.show_images:
-                lidar_bev_image = cv2.rectangle(    lidar_bev_image,
-                                                    rectangle_top_left,
-                                                    rectangle_bottom_right,
-                                                    (255, 0, 0),
-                                                    1)
-            
-            rectangle = numpy_lidar_bev[    rectangle_top_left[1]:rectangle_bottom_right[1],
-                                            rectangle_top_left[0]:rectangle_bottom_right[0]].copy() / 255
+                lidar_bev_image = cv2.rectangle(lidar_bev_image,
+                                                rectangle_top_left,
+                                                rectangle_bottom_right,
+                                                (255, 0, 0),
+                                                1)
+
+            rectangle = numpy_lidar_bev[rectangle_top_left[1]:rectangle_bottom_right[1],
+                        rectangle_top_left[0]:rectangle_bottom_right[0]].copy() / 255
             ammount_of_obtacles_in_front += np.sum(rectangle > 0.5)
 
+        if self.predict_speed:
+            steer, throttle, brake = self.model.control_pid(pred_waypoints_for_pid, speed_for_model)
 
-        # There I use the speed prediction and I choose to follow or not it
-        the_model_want_to_brake = pred_target_speed[0][0] > 0.1
-        if the_model_want_to_brake and \
-            (
-                (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_MOVING and speed[0] >= 10) 
-                or 
-                (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_STOP and speed[0] < 10)
-            ): # we will stop the car
-            steer =     float(0)
-            throttle =  float(0)
-            brake =     float(1.0)
+            # There I use the speed prediction and I choose to follow or not it
+            the_model_want_to_brake = pred_target_speed[0][0] > 0.1
+            if the_model_want_to_brake and \
+                (
+                    (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_MOVING and speed[0] >= 10)
+                    or
+                    (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_STOP and speed[0] < 10)
+                ): # we will stop the car
+                steer =     float(0)
+                throttle =  float(0)
+                brake =     float(1.0)
+            else:
+                steer =     float(-steer)
+                throttle =  float(throttle)
+                brake =     float(brake)
         else:
-            steer =     float(-steer)
-            throttle =  float(throttle)
-            brake =     float(brake)
-        control = carla.VehicleControl(steer=steer, throttle=throttle, brake=brake)
+            # There I use the acceleration prediction and I choose to follow or not it
+            max_index = torch.argmax(pred_target_speed[0])
+            if max_index == 0:
+                target_speed = speed_for_model + speed_for_model * 0.1
+            elif max_index == 1:
+                target_speed = speed_for_model
+            else:
+                target_speed = speed_for_model - speed_for_model * 0.1
+            the_model_want_to_brake = max_index == 0
+            steer, throttle, brake = self.model.control_pid(pred_waypoints_for_pid, speed_for_model.cpu())
+                                                            # target_speed.cpu())
+            if the_model_want_to_brake and \
+                    (
+                            (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_MOVING and
+                             speed[0] >= 10)
+                            or
+                            (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_STOP and
+                             speed[0] < 10)
+                    ):  # we will stop the car
+                steer = float(0)
+                throttle = float(0)
+                brake = float(1.0)
+            else:
+                steer = float(-steer)
+                throttle = float(throttle)
+                brake = float(brake)
+        control = carla.VehicleControl(steer=steer, throttle=throttle, brake=bool(brake))
 
         # There I add the steer, throttle, brake and ammount_of_obtacles_in_front on the waypoints output image
         if self.show_images:
@@ -293,15 +306,14 @@ class NutfuserAutonomousAgent(AutonomousAgent):
             cv2.putText(waypoints_image, f"[{float(-steer):.2f}, {float(throttle):.2f}, {float(brake):.2f}]", (255, 200), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA)
             cv2.putText(waypoints_image, f"obs ammount = {ammount_of_obtacles_in_front}", (255, 220), cv2.FONT_HERSHEY_SIMPLEX , fontScale=0.6, color=(255, 0, 255), thickness=2, lineType=cv2.LINE_AA)
 
-
         # @@@@@@@@@@@@@@@@@
         # @ SHOW THE DATA @
         # @@@@@@@@@@@@@@@@@
         # Show the input of the network
         if self.show_images:
             cv2.imshow('FRONT RGB', front_image)  
-            cv2.imshow('BEV RGB', bev_rgb_image)  
-            cv2.imshow('BEV LIDAR', lidar_bev_image)  
+            cv2.imshow('BEV RGB', bev_rgb_image)
+            cv2.imshow('BEV LIDAR', lidar_bev_image)
 
         # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
         # @ SHOW THE OUTPUT OF THE NETWORK @

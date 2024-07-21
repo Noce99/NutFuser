@@ -574,7 +574,7 @@ def create_waypoints_comparison(prediction_target_speed, prediction_waypoints, a
     list_predicted_target_speed = [float(el) for el in prediction_target_speed]
     index_best_predicted_target_speed = np.argmax(prediction_target_speed)
     text_predicted_target_speed = ""
-    for i in range(4):
+    for i in range(len(list_predicted_target_speed)):
         text_predicted_target_speed += f"{list_predicted_target_speed[i]:.2f}"
         if i != 3:
             text_predicted_target_speed += ","
@@ -634,6 +634,7 @@ def load_model_given_weights(weights_path):
     just_a_backbone = None
     tfpp_original = None
     abstract_semantic = None
+    predict_speed = None
     if "flow_decoder.deconv1.0.weight" in weights.keys():
         # Predicting also flow
         a_config_file.use_flow = True
@@ -675,11 +676,25 @@ def load_model_given_weights(weights_path):
     else:
         a_config_file.use_abstract_bev_semantic = False
         abstract_semantic = False
+    if weights["target_speed_acceleration_network.2.weight"].shape[0] == 4:
+        predict_speed = True
+        a_config_file.predict_speed = True
+        a_config_file.predict_acceleration = False
+    else:
+        assert weights["target_speed_acceleration_network.2.weight"].shape[0] == 3
+        predict_speed = False
+        a_config_file.predict_speed = False
+        a_config_file.predict_acceleration = True
+        a_config_file.target_speed_weights = [1.0, 1.0, 1.0]
 
     print(f"PREDICT FLOW:\t\t{predicting_flow}")
     print(f"JUST A BACKBONE:\t{just_a_backbone}")
     print(f"ORIGINAL TFPP:\t\t{tfpp_original}")
     print(f"ABSTRACT BEV SEMANTIC:\t{abstract_semantic}")
+    if predict_speed:
+        print(f"PREDICT SPEED:\t\tTrue")
+    else:
+        print(f"PREDICT ACCELERATION:\tTrue")
 
     if tfpp_original:
         raise NutException(color_error_string(f"You have given me original tfpp weights but I cannot deal with them!"))
@@ -695,7 +710,7 @@ def load_model_given_weights(weights_path):
         print("@"*200)
         raise NutException(color_error_string(f"Weight in '{weights_path}' not compatible with the model!"))
 
-    return model, predicting_flow, just_a_backbone, tfpp_original
+    return model, predicting_flow, just_a_backbone, tfpp_original, predict_speed
 
 
 def indent(elem, level=0):
