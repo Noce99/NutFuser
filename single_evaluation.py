@@ -201,7 +201,7 @@ if __name__ == "__main__":
 
     # (0) SET UP LOGS AND DATASETFOLDER
     nutfuser_folder_path = pathlib.Path(__file__).parent.resolve()
-    carla_log_path = os.path.join(nutfuser_folder_path, "logs", f"carla_server_evaluation_logs.log")
+    carla_log_path = os.path.join(nutfuser_folder_path, "logs", f"carla_server_evaluation_logs_{args.id}.log")
     scenario_runner_log_path = os.path.join(nutfuser_folder_path, "logs", f"scenario_runner.log")
 
     # (1) SHOW A TABLE WITH ALL THE ARGUMENTS
