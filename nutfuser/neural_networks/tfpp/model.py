@@ -728,8 +728,6 @@ class LidarCenterNet(nn.Module):
             half_second = one_second // 2
             desired_speed = np.linalg.norm(waypoints[half_second - 1] - waypoints[one_second - 1]) * 2.0
 
-        print(f"actual_speed = {speed}, desired_speed = {desired_speed}")
-
         if self.make_histogram:
             self.speed_histogram.append(desired_speed * 3.6)
 
