@@ -49,6 +49,9 @@ class NutfuserAutonomousAgent(AutonomousAgent):
         self.model.eval()
 
         self.show_images = show_images
+        # Let's define the number of frame during witch we keep speeding up because we were stuck
+        self.unstack_frame = 0
+        self.frames_till_is_stuck = 0
 
     def sensors(self):
         """
@@ -274,30 +277,48 @@ class NutfuserAutonomousAgent(AutonomousAgent):
         else:
             # There I use the acceleration prediction and I choose to follow or not it
             max_index = torch.argmax(pred_target_speed[0])
-            if max_index == 0:
-                target_speed = speed_for_model + speed_for_model * 0.1
-            elif max_index == 1:
-                target_speed = speed_for_model
+
+            if self.unstack_frame > 0:
+                max_index = 2
+                self.unstack_frame -= 1
             else:
-                target_speed = speed_for_model - speed_for_model * 0.1
-            the_model_want_to_brake = max_index == 0
-            steer, throttle, brake = self.model.control_pid(pred_waypoints_for_pid, speed_for_model.cpu())
-                                                            # target_speed.cpu())
-            if the_model_want_to_brake and \
-                    (
-                            (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_MOVING and
-                             speed[0] >= 10)
-                            or
-                            (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_STOP and
-                             speed[0] < 10)
-                    ):  # we will stop the car
+                if max_index == 1 and speed_for_model < 0.1:
+                    self.frames_till_is_stuck += 1
+                    if self.frames_till_is_stuck > config.NUMBER_OF_FRAMES_AFTER_WE_SAY_WE_ARE_STUCK:
+                        self.unstack_frame = config.FRAMES_NEEDED_TO_UNSTACK
+                        self.frames_till_is_stuck = 0
+
+            if max_index == 0:
+                target_speed = (speed_for_model - speed_for_model * 0.1).cpu()
+            elif max_index == 1:
+                if speed_for_model * 3.6 < 18:
+                    target_speed = (speed_for_model + config.SPEED_GAIN_TO_KEEP_SPEED).cpu()
+                else:
+                    target_speed = speed_for_model.cpu()
+            else:
+                target_speed = (speed_for_model + speed_for_model * 0.1).cpu()
+                if target_speed < 1:
+                    target_speed = torch.tensor([10])
+
+            steer, throttle, brake = self.model.control_pid(pred_waypoints_for_pid, speed_for_model.cpu(),
+                                                            target_speed)
+
+            """
+            if \
+                (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_MOVING and
+                 speed[0] >= 10) \
+                or \
+                (ammount_of_obtacles_in_front > config.MINIMUM_AMOUNT_OF_OBSTACLES_IN_FRONT_WHILE_STOP and
+                 speed[0] < 10):
                 steer = float(0)
                 throttle = float(0)
                 brake = float(1.0)
-            else:
-                steer = float(-steer)
-                throttle = float(throttle)
-                brake = float(brake)
+            BAD STUFF!
+            """
+
+            steer = float(-steer)
+            throttle = float(throttle)
+            brake = float(brake)
         control = carla.VehicleControl(steer=steer, throttle=throttle, brake=bool(brake))
 
         # There I add the steer, throttle, brake and ammount_of_obtacles_in_front on the waypoints output image

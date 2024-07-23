@@ -54,7 +54,10 @@ def show_frame_num_and_speeds(screen, dataset_path):
     screen.blit(txt_img, (20, 60))
     if os.path.isfile(acceleration_path):
         acceleration_array = np.load(acceleration_path)
+        previous_speeds_array = np.load(previous_speeds_path)
         max_index = np.argmax(acceleration_array[FRAME])
+        if previous_speeds_array[FRAME] < 0.5:
+            max_index = 0
         representative_char = None
         if max_index == 0:
             representative_char = "-"

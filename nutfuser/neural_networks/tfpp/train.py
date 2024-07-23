@@ -800,6 +800,11 @@ class Engine(object):
                 target_speed_acceleration = data["target_speed"].to(self.device, dtype=torch.float32)
             else:
                 target_speed_acceleration = data["acceleration"].to(self.device, dtype=torch.float32)
+                for batch in range(target_speed_acceleration.shape[0]):
+                    if ego_vel[batch, 0] < 0.5:
+                        target_speed_acceleration[batch][0] = 1.0
+                        target_speed_acceleration[batch][1] = 0.0
+                        target_speed_acceleration[batch][2] = 0.0
             checkpoint_label = data["waypoints"].to(self.device, dtype=torch.float32)
             if checkpoint_label.shape[2] == 3:
                 checkpoint_label = checkpoint_label[:, :, :-1]

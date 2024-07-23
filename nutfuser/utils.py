@@ -581,9 +581,15 @@ def create_waypoints_comparison(prediction_target_speed, prediction_waypoints, a
         text_predicted_target_speed += " "
     cv2.putText(black_part_for_text, text_predicted_target_speed, (space_from_left, space_from_top * 4),
                 cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.45, color=(255, 0, 0), thickness=1, lineType=cv2.LINE_AA)
-    cv2.putText(black_part_for_text, f"{speeds[index_best_predicted_target_speed]:.2f} km/h",
-                (space_from_left, space_from_top * 5), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.45, color=(255, 0, 0),
-                thickness=1, lineType=cv2.LINE_AA)
+    if len(list_predicted_target_speed) == 4:
+        cv2.putText(black_part_for_text, f"{speeds[index_best_predicted_target_speed]:.2f} km/h",
+                    (space_from_left, space_from_top * 5), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.45, color=(255, 0, 0),
+                    thickness=1, lineType=cv2.LINE_AA)
+    else:
+        text = ["Decelerate", "Keep Speed", "Accelerate"]
+        cv2.putText(black_part_for_text, text[index_best_predicted_target_speed],
+                    (space_from_left, space_from_top * 5), cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.45, color=(255, 0, 0),
+                    thickness=1, lineType=cv2.LINE_AA)
 
     waypoints_comparison = np.zeros((background_rgb.shape[0], background_rgb.shape[1] * 2, 3), dtype=np.uint8)
     waypoints_comparison[:, 0:background_rgb.shape[1]] = background_rgb
