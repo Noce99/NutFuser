@@ -248,6 +248,7 @@ def print_results(results):
     print(utils.color_info_string("#" * len(to_print)))
     print(tabulate(total_table, headers=total_table_head, tablefmt="grid"))
 
+
 def parse_jsons(jsons_list_with_absolute_path):
     tot_route_completion = 0
     tot_collisions = 0
@@ -259,6 +260,15 @@ def parse_jsons(jsons_list_with_absolute_path):
         tot_time += results["criteria"]["Duration"]["actual"]
     n = float(len(jsons_list_with_absolute_path))
     return tot_route_completion/n, tot_collisions/n, tot_time/n
+
+
+def print_result_per_net(result_per_net_1):
+    city_table_head = ["", "Completion", "Collisions", "Time"]
+    city_table = []
+    for city in result_per_net_1:
+        city_table.append([city, result_per_net_1[city][0], result_per_net_1[city][1], result_per_net_1[city][2],])
+    print(tabulate(city_table, headers=city_table_head, tablefmt="grid"))
+
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description=__doc__)
@@ -273,78 +283,30 @@ if __name__ == "__main__":
     evaluation_root_folder = args.results_folder
     networks = os.listdir(evaluation_root_folder)
     all_json = {}
+    total_all_json = {}
     result_per_net = {}
+    total_result_per_net = {}
     for net in networks:
         cities = os.listdir(os.path.join(evaluation_root_folder, net))
-        all_json[f"{net}"] = []
+        cities = sorted(cities)
+        all_json[f"{net}"] = {}
+        total_all_json[f"{net}"] = []
         result_per_net[f"{net}"] = {}
+        total_result_per_net[f"{net}"] = {}
         for city in cities:
             routes = os.listdir(os.path.join(evaluation_root_folder, net, city))
+            all_json[f"{net}"][city] = []
             for route in routes:
-                all_json[f"{net}"].append(os.path.join(evaluation_root_folder, net, city, route))
-        net_total_results = parse_jsons(all_json[f"{net}"])
-        result_per_net[f"{net}"] = net_total_results
-    print(result_per_net)
-    exit()
-
-    if len(evaluations) > 1:
-        print("Something fancy for selecting witch evaluation folder to choose!")
-        print("#" * 30)
-        for i, evaluation in enumerate(evaluations):
-            print(f"[{i}] {evaluation}")
-        prompt = None
-        while prompt is None:
-            prompt = input("Which evaluation to evaluate? : ")
-            try:
-                prompt = int(prompt)
-                if prompt < 0 or prompt >= len(evaluations):
-                    prompt = None
-            except:
-                prompt = None
-        selected_index = prompt
-
-        print(f"You selected: {evaluations[selected_index]}")
-        selected_evaluation_folder = evaluations[selected_index]
-    else:
-        selected_evaluation_folder = evaluations[0]
-
-    all_evaluation_sub_folder = os.listdir(os.path.join(evaluation_root_folder, selected_evaluation_folder))
-
-    results = {}
-    total_simulation_time = 0
-    for sub_folder in all_evaluation_sub_folder:
-        current_full_parent_path = os.path.join(evaluation_root_folder, selected_evaluation_folder, sub_folder)
-        all_json = os.listdir(current_full_parent_path)
-        if len(all_json) == 10:
-            dict_of_jsons = dict_of_json_paths(all_json, current_full_parent_path)
-            collisions, completion_percentage, \
-                duration, simulation_time = count_collisions_and_completion_percentage(dict_of_jsons)
-            num_of_routes = len(dict_of_jsons)
-        elif len(all_json) == 20:
-            json_in_couples = put_jsons_in_couple(all_json, current_full_parent_path)
-            collisions, completion_percentage, \
-                duration, simulation_time = count_collisions_and_completion_percentage_couples(json_in_couples)
-            num_of_routes = len(json_in_couples)
-        else:
-            print(utils.color_error_string(f"The {sub_folder} is not valid!" +
-                                           f" It contains {len(all_json)} files and it's not 10 or 20!"))
-            continue
-
-        results[sub_folder] = {"collisions": collisions,
-                               "completion_percentage": completion_percentage,
-                               "duration": duration,
-                               "num_of_routes": num_of_routes}
-        total_simulation_time += simulation_time
-
-    to_print = "# SUM UP #"
-    print(utils.color_info_string("#" * len(to_print)))
-    print(utils.color_info_string(to_print))
-    print(utils.color_info_string("#" * len(to_print)))
-    print(utils.color_info_success(
-        f"Found out a total of {total_simulation_time / 3600:.2f} hours of simulation time in"
-        f" {len(all_evaluation_sub_folder)} towns."))
-    print(utils.color_info_success(f"Each entry in the table should be consider as a per route value."))
-    if isinstance(results[list(results)[0]]["collisions"], dict):
-        print_results_couples(results)
-    else:
-        print_results(results)
+                all_json[f"{net}"][city].append(os.path.join(evaluation_root_folder, net, city, route))
+                total_all_json[f"{net}"].append(os.path.join(evaluation_root_folder, net, city, route))
+            net_total_results = parse_jsons(all_json[f"{net}"][city])
+            result_per_net[f"{net}"][city] = net_total_results
+        total_net_total_results = parse_jsons(total_all_json[f"{net}"])
+        total_result_per_net[f"{net}"] = total_net_total_results
+    print(total_result_per_net)
+    print("@"*200)
+    for net in networks:
+        print("@"*(len(net)+2))
+        print(f"@{net}@")
+        print("@" * (len(net) + 2))
+        print_result_per_net(result_per_net[net])
