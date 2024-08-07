@@ -73,7 +73,7 @@ def show_frame_num_and_speeds(screen, dataset_path):
 
 
 titles_dict = {0: "RGB_A", 1: "RGB_B", 2: "DEPTH", 3: "SEMANTIC", 4: "OPTICAL_FLOW", 5: "BEV", 6: "ALL GPS",
-               7: "BEV Semantic 2 + BBS", 8: "TESTS"}
+               7: "BEV Semantic 2 + BBS", 8: "TESTS", 9:"BEV COMPARISON"}
 folders_dict = {0: "rgb_A", 1: "rgb_B", 2: "depth", 3: "semantic", 4: "optical_flow"}
 
 
@@ -260,6 +260,39 @@ def print_section(screen, number, dataset_path):
         y = config.IMAGE_H * 4 // 2
         rect.center = x, y
         screen.blit(img, rect)
+    elif number == 9:
+        if os.path.isdir(os.path.join(dataset_path, "bev_semantic_2")):
+            folder_path = os.path.join(dataset_path, "bev_semantic_2")
+            img_path = os.path.join(folder_path, f"{FRAME}.png")
+            my_array = cv2.imread(img_path)
+            my_array = utils.color_semantic_2(my_array)
+            my_array = np.rot90(my_array, k=1)
+            my_array = np.flip(my_array, axis=0)
+            my_array = cv2.resize(my_array, (config.BEV_IMAGE_H * 2, config.BEV_IMAGE_W * 2),
+                                  interpolation=cv2.INTER_NEAREST_EXACT)
+            img = pygame.surfarray.make_surface(my_array)
+            img.convert()
+            rect = img.get_rect()
+            x = config.BEV_IMAGE_W
+            y = SIDE_SPACE_SIZE + config.BEV_IMAGE_H
+            rect.center = x, y
+            screen.blit(img, rect)
+        if os.path.isdir(os.path.join(dataset_path, "bev_semantic")):
+            folder_path = os.path.join(dataset_path, "bev_semantic")
+            img_path = os.path.join(folder_path, f"{FRAME}.png")
+            my_array = cv2.imread(img_path)
+            my_array = utils.color_semantic(my_array)
+            my_array = np.rot90(my_array, k=1)
+            my_array = np.flip(my_array, axis=0)
+            my_array = cv2.resize(my_array, (config.BEV_IMAGE_H * 2, config.BEV_IMAGE_W * 2),
+                                  interpolation=cv2.INTER_NEAREST_EXACT)
+            img = pygame.surfarray.make_surface(my_array)
+            img.convert()
+            rect = img.get_rect()
+            x = config.BEV_IMAGE_W * 2 + config.BEV_IMAGE_W
+            y = SIDE_SPACE_SIZE + config.BEV_IMAGE_H
+            rect.center = x, y
+            screen.blit(img, rect)
     pygame.display.update()
 
 
@@ -522,6 +555,8 @@ if __name__ == "__main__":
                     print_section(screen, 7, args.dataset_path)
                 elif event.key == pygame.K_9:
                     print_section(screen, 8, args.dataset_path)
+                elif event.key == pygame.K_0:
+                    print_section(screen, 9, args.dataset_path)
                 elif event.key == pygame.K_s:
                     image = save_image(args.dataset_path)
                     path = os.path.join(pathlib.Path(__file__).parent.resolve(), "assets", "show_data.jpg")
