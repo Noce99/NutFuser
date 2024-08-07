@@ -1034,7 +1034,7 @@ def color_semantic(my_image):
 
 def color_semantic_2(my_image):
     for i in range(10):
-        my_image = set_image_pixel_colo(my_image, BirdViewMasks(i), RGB_BY_MASK[BirdViewMasks(i)])
+        my_image = set_image_pixel_color(my_image, BirdViewMasks(i), RGB_BY_MASK[BirdViewMasks(i)])
     return my_image
 
 
