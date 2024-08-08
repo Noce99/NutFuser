@@ -429,8 +429,8 @@ def save_image(dataset_path):
     big_image = cv2.putText(big_image, f"Target Speed: {next_speed * 3.6:.2f} km/h", org, font,
                             font_scale, SECTION_TITLE_COLOR, font_thickness, cv2.LINE_AA)
     org = (550, config.BEV_IMAGE_H * 6 + last_written_part_width // 3 * 2)
-    big_image = cv2.putText(big_image, f"Target Acceleration: {next_acceleration}", org, font,
-                            font_scale, SECTION_TITLE_COLOR, font_thickness, cv2.LINE_AA)
+    # big_image = cv2.putText(big_image, f"Target Acceleration: {next_acceleration}", org, font,
+    #                         font_scale, SECTION_TITLE_COLOR, font_thickness, cv2.LINE_AA)
 
     # PRINT LABELS
     labels = "ABCDE"
@@ -476,10 +476,10 @@ def save_image(dataset_path):
     big_image = cv2.putText(big_image, "N", org, font,
                             font_scale, SECTION_TITLE_COLOR, font_thickness, cv2.LINE_AA)
 
-    org = (510, config.BEV_IMAGE_H * 6 + last_written_part_width // 3 * 2)
-    cv2.circle(big_image, (org[0] + 10, org[1] - 10), 20, (255, 255, 255), -1)
-    big_image = cv2.putText(big_image, "O", org, font,
-                            font_scale, SECTION_TITLE_COLOR, font_thickness, cv2.LINE_AA)
+    # org = (510, config.BEV_IMAGE_H * 6 + last_written_part_width // 3 * 2)
+    # cv2.circle(big_image, (org[0] + 10, org[1] - 10), 20, (255, 255, 255), -1)
+    # big_image = cv2.putText(big_image, "O", org, font,
+    #                         font_scale, SECTION_TITLE_COLOR, font_thickness, cv2.LINE_AA)
     return big_image
 
 

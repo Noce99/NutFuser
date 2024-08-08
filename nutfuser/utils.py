@@ -93,11 +93,9 @@ def calculate_point_each_meter(points, den_x, den_y):
 
 def optical_flow_to_human(flow):
     flow = (flow - 2 ** 15) / 64.0
-    H = flow.shape[0]
-    W = flow.shape[1]
 
-    output = flow_to_image(flow, clip_flow=60)
-    output *= 255
+    output = flow_to_image(flow, clip_flow=None)
+    # output *= 255
     return output
 
 
