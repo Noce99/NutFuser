@@ -1185,6 +1185,7 @@ class Engine(object):
         torch.save(self.scheduler.state_dict(), scheduler_file)
 
         # Remove last epochs files to avoid accumulating storage
+        """
         if self.cur_epoch > 0:
             last_model_file = os.path.join(self.args.logdir, f'model_{self.cur_epoch - 1:04d}.pth')
             last_optimizer_file = os.path.join(self.args.logdir, f'optimizer_{self.cur_epoch - 1:04d}.pth')
@@ -1198,6 +1199,7 @@ class Engine(object):
                 os.remove(last_scaler_file)
             if os.path.isfile(last_scheduler_file):
                 os.remove(last_scheduler_file)
+        """
 
 
 # We need to seed the workers individually otherwise random processes in the
