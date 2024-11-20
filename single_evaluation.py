@@ -12,10 +12,7 @@ import sys
 sys.path.append("/leonardo_scratch/fast/IscrC_ADC/CARLA_0_9_15/PythonAPI/carla/")
 
 
-from nutfuser.data_creation import take_data_without_records, take_data_just_position_for_evaluation
-from nutfuser import utils
 from nutfuser import config
-from datetime import datetime
 
 sys.path.append(os.path.join(pathlib.Path(__file__).parent.resolve(), "scenario_runner"))
 from nutfuser.carla_interface.run_carla import check_integrity_of_carla_path, \
@@ -117,6 +114,7 @@ pids_to_be_killed = []
 
 
 def run_all(args, route_path, weights_path, output_dir_path, id):
+    from nutfuser import utils
     # (1) LAUNCH CARLA SERVER
     print("Launching Carla Server...")
     os.environ["PATH"] = f"{os.environ['PATH']}:/leonardo/home/userexternal/emannocc/xdg-user-dirs-0.18/"
@@ -191,10 +189,12 @@ def run_all(args, route_path, weights_path, output_dir_path, id):
 if __name__ == "__main__":
     args = get_arguments()
     egg_file_path, carlaUE4_path = check_integrity_of_carla_path(args)
+    from nutfuser import utils
     try:
         import carla
     except:
         raise Exception(utils.color_error_string(f"Not able to import Carla from [{egg_file_path}]"))
+
 
     print(utils.get_a_title("STARTING LAUNCHING ALL THE PROCESS", color="blue"))
     print(utils.color_info_success(f"Find out a valid carla in {egg_file_path}!"))
