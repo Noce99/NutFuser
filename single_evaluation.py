@@ -15,9 +15,6 @@ sys.path.append("/leonardo_scratch/fast/IscrC_ADC/CARLA_0_9_15/PythonAPI/carla/"
 from nutfuser import config
 
 sys.path.append(os.path.join(pathlib.Path(__file__).parent.resolve(), "scenario_runner"))
-from nutfuser.carla_interface.run_carla import check_integrity_of_carla_path, \
-    launch_carla_server_saifly_and_wait_till_its_up, \
-    launch_scenario_runner_saifly_and_wait_till_its_up
 
 
 def get_arguments():
@@ -188,8 +185,11 @@ def run_all(args, route_path, weights_path, output_dir_path, id):
 
 if __name__ == "__main__":
     args = get_arguments()
-    egg_file_path, carlaUE4_path = check_integrity_of_carla_path(args)
+    from nutfuser.carla_interface.add_carla_library import add_carla_library_to_path
+    egg_file_path, carlaUE4_path = add_carla_library_to_path(args.carla_path, args.end_of_egg_file)
     from nutfuser import utils
+    from nutfuser.carla_interface.run_carla import launch_carla_server_saifly_and_wait_till_its_up, \
+        launch_scenario_runner_saifly_and_wait_till_its_up
     try:
         import carla
     except:
