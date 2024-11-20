@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 import collections
-import sys
+from nutfuser.carla_interface.add_carla_library import add_carla_library_to_path
 
 Job = collections.namedtuple("Job", ["id", "town", "port", "tm_port"])
 
@@ -20,7 +20,7 @@ if __name__ == "__main__":
                 done = True
         except:
             done = False
-    sys.path.append(CARLA_PATH)
+    add_carla_library_to_path(carla_path=CARLA_PATH, end_of_egg_file="py3.7-linux-x86_64.egg")
     from nutfuser import utils
     print(utils.color_info_string(f"Found Carla in {CARLA_PATH}!"))
 
