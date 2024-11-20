@@ -135,14 +135,14 @@ def run_all(args, route_path, weights_path, output_dir_path):
     print("Launching Scenario Runner...")
     agent_path = os.path.join(pathlib.Path(__file__).parent.resolve(), "scenario_runner", "srunner", "autoagents",
                               "nutfuser_autonomous_agent.py")
-    args_list = ["--route", route_path,
-                 "--agent", agent_path,
+    args_list = ["--route", str(route_path),
+                 "--agent", str(agent_path),
                  "--timeout", "300",
-                 "--agentConfig", weights_path,
+                 "--agentConfig", str(weights_path),
                  "--json",
-                 "--outputDir", output_dir_path,
-                 "--port", args.rpc_port,
-                 "--trafficManagerPort", args.tm_port]
+                 "--outputDir", str(output_dir_path),
+                 "--port", str(args.rpc_port),
+                 "--trafficManagerPort", str(args.tm_port)]
     if args.show_images:
         args_list.append("--show_images")
     scenario_runner_pid = multiprocessing.Value(c_int)
