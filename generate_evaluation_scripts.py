@@ -2,10 +2,7 @@ import json
 import os
 import shutil
 import collections
-import random
-
-from nutfuser import config
-from nutfuser import utils
+import sys
 
 Job = collections.namedtuple("Job", ["id", "town", "port", "tm_port"])
 
@@ -13,6 +10,19 @@ if __name__ == "__main__":
 
     # GET NUTFUSER FOLDER
     NUTFUSER = os.path.dirname(os.path.realpath(__file__))
+
+    # ASK CARLA FOLDER
+    done = False
+    while not done:
+        try:
+            CARLA_PATH = input("Where is the Carla folder? [absolute path] : ")
+            if os.path.isdir(CARLA_PATH):
+                done = True
+        except:
+            done = False
+    sys.path.append(CARLA_PATH)
+    from nutfuser import utils
+    print(utils.color_info_string(f"Found Carla in {CARLA_PATH}!"))
 
     # ASK where to put the data_jobs FOLDER
     done = False
@@ -72,17 +82,6 @@ if __name__ == "__main__":
     with open(os.path.join(script_and_jobs_path, 'weight_list.json'), 'r') as f:
         networks_weights = json.load(f)
     print(f"After your modification found out {len(networks_weights)} networks to evaluate!")
-
-    # ASK CARLA FOLDER
-    done = False
-    while not done:
-        try:
-            CARLA_PATH = input("Where is the Carla folder? [absolute path] : ")
-            if os.path.isdir(CARLA_PATH):
-                done = True
-        except:
-            done = False
-    print(utils.color_info_string(f"Found Carla in {CARLA_PATH}!"))
 
     # ASK SLURM ACCOUNT
     done = False
