@@ -1035,6 +1035,34 @@ def color_semantic_2(my_image):
         my_image = set_image_pixel_color(my_image, BirdViewMasks(i), RGB_BY_MASK[BirdViewMasks(i)])
     return my_image
 
+import matplotlib as mpl
+import matplotlib.cm as cm
+
+def color_depth(disp_array: np.ndarray):
+    disp_array = disp_array[:, :, 0]
+    disp_array = 255 - disp_array
+    if isinstance(disp_array, torch.Tensor):
+        disp_array = disp_array.numpy()
+    disp_pixels = np.argwhere(disp_array > 0)
+    u_indices = disp_pixels[:, 1]
+    v_indices = disp_pixels[:, 0]
+    disp = disp_array[v_indices, u_indices]
+    max_disp = 80
+
+    norm = mpl.colors.Normalize(vmin=0, vmax=255, clip=True)
+    mapper = cm.ScalarMappable(norm=norm, cmap='inferno')
+
+    disp_color = mapper.to_rgba(disp_array)
+    print(f"disp_color = {disp_color.shape}")
+    disp_color = disp_color[..., :3]
+    print(f"disp_color = {disp_color.shape}")
+    #output_image = np.zeros((disp_array.shape[0], disp_array.shape[1], 3))
+    #output_image[v_indices, u_indices, :] = disp_color
+    #output_image = (255 * output_image).astype("uint8")
+    # output_image = cv2.cvtColor(output_image, cv2.COLOR_RGB2BGR)
+    output_image = (255 * disp_color).astype("uint8")
+    return output_image
+
 
 if __name__ == "__main__":
     import neural_networks.tfpp.config as tf_config

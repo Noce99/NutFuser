@@ -248,7 +248,7 @@ def print_section(screen, number, dataset_path):
             rect.center = x, y
             screen.blit(img, rect)
     elif number == 8:
-        image = save_image(dataset_path)
+        image, _ = save_image(dataset_path)
         image = np.rot90(image, k=1)
         image = np.flip(image, axis=0)
         image = cv2.resize(image, (int(image.shape[1]*0.6), int(image.shape[0]*0.6)),
@@ -313,6 +313,7 @@ def save_image(dataset_path):
     folder_path = os.path.join(dataset_path, f"depth_0")
     img_path = os.path.join(folder_path, f"{FRAME}.png")
     depth = cv2.imread(img_path)
+    depth = utils.color_depth(depth)
     print(f"Depth = {depth.shape}")
     # SEMANTIC
     folder_path = os.path.join(dataset_path, f"semantic_0")
@@ -329,6 +330,7 @@ def save_image(dataset_path):
     folder_path = os.path.join(dataset_path, "bev_lidar")
     img_path = os.path.join(folder_path, f"{FRAME}.png")
     bev_lidar = cv2.imread(img_path)
+    bev_lidar_with_waypoints = bev_lidar.copy()
     print(f"Bev Lidar = {bev_lidar.shape}")
     # BEV SEMANTIC
     folder_path = os.path.join(dataset_path, "bev_semantic")
@@ -361,7 +363,7 @@ def save_image(dataset_path):
                   config.BEV_IMAGE_W / config.BEV_SQUARE_SIDE_IN_M)
             yy = ((config.BEV_IMAGE_H / 2) - frame_waypoints[FRAME, i, 1] *
                   config.BEV_IMAGE_W / config.BEV_SQUARE_SIDE_IN_M)
-            cv2.circle(bev_lidar, (int(xx), int(yy)), 3, (255, 0, 0), -1)
+            cv2.circle(bev_lidar_with_waypoints, (int(xx), int(yy)), 3, (255, 0, 0), -1)
     # TARGET POINTS
     frame_targetpoints_path = os.path.join(dataset_path, "frame_targetpoints.npy")
     frame_targetpoints = np.load(frame_targetpoints_path)
@@ -380,6 +382,7 @@ def save_image(dataset_path):
     target_point_x = int(xx)
     target_point_y = int(yy)
     cv2.circle(bev_lidar, (int(xx), int(yy)), 4, (0, 255, 0), -1)
+    cv2.circle(bev_lidar_with_waypoints, (int(xx), int(yy)), 4, (0, 255, 0), -1)
     # PREVIOUS SPEED
     previous_speeds_path = os.path.join(dataset_path, "previous_speeds.npy")
     previous_speeds_array = np.load(previous_speeds_path)
@@ -415,7 +418,7 @@ def save_image(dataset_path):
     big_image[config.BEV_IMAGE_H * 3:config.BEV_IMAGE_H * 4, :] = semantic
     big_image[config.BEV_IMAGE_H * 4:config.BEV_IMAGE_H * 5, :] = flow
     big_image[config.BEV_IMAGE_H * 5:config.BEV_IMAGE_H * 6,
-              config.BEV_IMAGE_W * 0:config.BEV_IMAGE_W * 1] = bev_lidar
+              config.BEV_IMAGE_W * 0:config.BEV_IMAGE_W * 1] = bev_lidar_with_waypoints
     big_image[config.BEV_IMAGE_H * 5:config.BEV_IMAGE_H * 6,
               config.BEV_IMAGE_W * 1:config.BEV_IMAGE_W * 2] = bev_semantic
     big_image[config.BEV_IMAGE_H * 5:config.BEV_IMAGE_H * 6,
@@ -433,6 +436,7 @@ def save_image(dataset_path):
     #                         font_scale, SECTION_TITLE_COLOR, font_thickness, cv2.LINE_AA)
 
     # PRINT LABELS
+    """
     labels = "ABCDE"
     for i in range(5):
         org = (15, config.BEV_IMAGE_H * i + 30)
@@ -480,7 +484,20 @@ def save_image(dataset_path):
     # cv2.circle(big_image, (org[0] + 10, org[1] - 10), 20, (255, 255, 255), -1)
     # big_image = cv2.putText(big_image, "O", org, font,
     #                         font_scale, SECTION_TITLE_COLOR, font_thickness, cv2.LINE_AA)
-    return big_image
+    """
+    pieces = {
+        "rgb_A": rgb,
+        "rgb_B": rgb_2,
+        "depth": depth,
+        "semantic": semantic,
+        "flow": flow,
+        "bev_lidar": bev_lidar,
+        "bev_lidar_with_waypoints": bev_lidar_with_waypoints,
+        "bev_semantic": bev_semantic,
+        "bev_semantic_2": bev_semantic_2,
+        "bbs": bbs_image
+    }
+    return big_image, pieces
 
 
 def custom_check_dataset_folder(dataset_path):
@@ -558,8 +575,13 @@ if __name__ == "__main__":
                 elif event.key == pygame.K_0:
                     print_section(screen, 9, args.dataset_path)
                 elif event.key == pygame.K_s:
-                    image = save_image(args.dataset_path)
+                    image, pieces = save_image(args.dataset_path)
                     path = os.path.join(pathlib.Path(__file__).parent.resolve(), "assets", "show_data.jpg")
                     image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
                     cv2.imwrite(path, image)
+                    for key in pieces.keys():
+                        path = os.path.join(pathlib.Path(__file__).parent.resolve(), "assets", f"{key}.png")
+                        image = cv2.cvtColor(pieces[key], cv2.COLOR_RGB2BGR)
+                        cv2.imwrite(path, image)
+
     pygame.quit()
