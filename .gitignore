@@ -280,3 +280,8 @@ fabric.properties
 .idea/vcs.xml
 .idea/.gitignore
 
+
+# Heavy/backup asset files kept locally
+assets/Cameras_sphere_and_A_Mustang.blend
+assets/Canon5DmII_fix.stl
+*.blend1
